@@ -11,7 +11,7 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 
 class Manifest:
@@ -23,6 +23,10 @@ class Manifest:
         self.version = version
         self.installed_at = datetime.now(timezone.utc).isoformat()
         self.files: dict[str, str] = {}  # relative path -> sha256
+        # Hooks installed into agent settings files (e.g. .claude/settings.json).
+        # Each entry: {"event": "Stop", "settings_path": ".claude/settings.json",
+        #              "script_path": ".devlog/hooks/stop.py", "command": "python3 ..."}
+        self.hooks: list[dict[str, Any]] = []
 
     @property
     def manifest_path(self) -> Path:
@@ -35,6 +39,7 @@ class Manifest:
             "version": self.version,
             "installed_at": self.installed_at,
             "files": self.files,
+            "hooks": self.hooks,
         }
         path = self.manifest_path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -58,6 +63,7 @@ class Manifest:
         )
         m.installed_at = data.get("installed_at", "")
         m.files = data.get("files", {})
+        m.hooks = data.get("hooks", [])
         return m
 
     @staticmethod

@@ -28,7 +28,7 @@ voice:
 triggers:
   - "New feature or command implemented"
   - "Significant bug fix or refactor"
-  - "Architecture decision made"
+  - "Architecture or scope decision reached (even if no code changed yet)"
   - "Notable technical challenge solved"
   - "Template or workflow changes"
 

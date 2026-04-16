@@ -1,15 +1,17 @@
 <!-- DEVLOG:START - Do not edit this section manually -->
 ## Development Blog (Automatic)
 
-This project keeps a development blog in `blog/`. **Before ending any response in which non-trivial work was produced**, check whether the session hit one of the triggers below. If it did, write or update the blog entry as part of the same turn — don't defer it to a future session and don't wait to be asked.
+This project keeps a development blog in `blog/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion — not only code or files produced. If it did, write or update the blog entry as part of the same turn — don't defer it to a future session and don't wait to be asked.
 
 ### When to write an entry
 
 - New feature or command implemented
 - Significant bug fix or refactor
-- Architecture decision made
+- Architecture or scope decision reached (even if no code changed yet)
 - Notable technical challenge solved
 - Template or workflow changes
+
+A turn that ends on a decision — e.g., choosing one design over another, agreeing on a scope cut, naming a constraint — counts even if no code or files were touched. Write the decision now; the implementation can be a separate entry later.
 
 If none of these triggers match the kind of work happening in this project, the defaults are wrong for this domain. Propose edits to `.devlog/config.yaml` that fit this project — at minimum the `triggers` list, and likely `voice` and `tags` too — apply them once the user approves, and ask the user to re-run `devlog install` so this convention block regenerates.
 
@@ -57,7 +59,7 @@ summary: "One-sentence summary of what was accomplished and why it matters."
 
 ### Available tags
 
-`architecture`, `cli`, `feature`, `bug-fix`, `refactor`, `testing`, `documentation`, `infrastructure`, `ux`, `demo`
+`architecture`, `bug-fix`, `cli`, `demo`, `documentation`, `feature`, `infrastructure`, `refactor`, `testing`, `ux`
 
 Prefer tags from this list. If a new tag genuinely fits and recurs, use it in the entry's frontmatter — it will be folded into this list automatically on the next `devlog install`.
 <!-- DEVLOG:END -->
