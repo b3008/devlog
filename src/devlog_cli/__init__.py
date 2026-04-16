@@ -12,10 +12,11 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import typer
 from rich.console import Console
@@ -131,6 +132,11 @@ def init(
 @app.command()
 def install(
     ai: str = typer.Option(..., "--ai", help="AI agent key (e.g. claude, copilot, gemini)."),
+    with_hook: bool = typer.Option(
+        False,
+        "--with-hook",
+        help="(claude only) Also install a Stop hook that reminds the agent to check for blog-worthy turns.",
+    ),
 ) -> None:
     """Inject the blog convention into an agent's context file."""
     project_root = Path.cwd()
@@ -139,6 +145,12 @@ def install(
         agent = get_agent(ai)
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1)
+
+    if with_hook and ai != "claude":
+        console.print(
+            f"[red]--with-hook is only supported for the 'claude' agent right now (got {ai!r}).[/red]"
+        )
         raise typer.Exit(1)
 
     # Check if devlog is initialized
@@ -188,6 +200,15 @@ def install(
     manifest.files[agent.context_file] = Manifest._sha256(new_content)
     tree.add(f"[green]Injected convention into {agent.context_file}[/green]")
 
+    # Optionally install the Claude Code Stop hook
+    if with_hook:
+        hook_record = _install_claude_stop_hook(project_root)
+        manifest.hooks.append(hook_record)
+        tree.add(
+            f"[green]Installed Stop hook[/green] "
+            f"([dim]{hook_record['script_path']} \u2192 {hook_record['settings_path']}[/dim])"
+        )
+
     manifest.save()
     tree.add("[dim]Manifest saved[/dim]")
 
@@ -198,6 +219,11 @@ def install(
         f"[green]Done.[/green] {agent.name} will now maintain a development blog "
         f"in [cyan]{config['blog_dir']}/[/cyan]."
     )
+    if not with_hook and ai == "claude":
+        console.print(
+            "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a Claude Code "
+            "Stop hook that nudges the agent before each turn ends.[/dim]"
+        )
 
 
 # ── Uninstall command ────────────────────────────────────────────────────
@@ -221,6 +247,8 @@ def uninstall(
         console.print(f"[red]No manifest found for {agent.name}. Not installed?[/red]")
         raise typer.Exit(1)
 
+    manifest = Manifest.load(manifest_path, project_root)
+
     # Remove convention from context file
     ctx_path = project_root / agent.context_file
     if ctx_path.exists():
@@ -238,6 +266,13 @@ def uninstall(
             console.print(f"[yellow]No devlog section found in {agent.context_file}[/yellow]")
     else:
         console.print(f"[yellow]{agent.context_file} not found[/yellow]")
+
+    # Remove any installed hooks recorded in the manifest
+    if manifest is not None:
+        for hook in manifest.hooks:
+            if hook.get("event") == "Stop" and ai == "claude":
+                for action in _uninstall_claude_stop_hook(project_root, hook):
+                    console.print(f"[green]{action}[/green]")
 
     # Clean up manifest
     if manifest_path.exists():
@@ -377,6 +412,123 @@ def version() -> None:
 def _templates_dir() -> Path:
     """Find the bundled templates directory."""
     return Path(__file__).parent / "templates"
+
+
+# ── Claude Code Stop hook helpers ────────────────────────────────────────
+
+CLAUDE_SETTINGS_REL = ".claude/settings.json"
+STOP_HOOK_SCRIPT_REL = ".devlog/hooks/stop.py"
+STOP_HOOK_COMMAND = f'python3 "$CLAUDE_PROJECT_DIR/{STOP_HOOK_SCRIPT_REL}"'
+
+
+def _install_claude_stop_hook(project_root: Path) -> dict[str, Any]:
+    """Copy the stop hook script and register it in .claude/settings.json.
+
+    Returns a hook record suitable for storage in the manifest.
+    """
+    # 1. Copy the hook script.
+    script_dst = project_root / STOP_HOOK_SCRIPT_REL
+    script_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(_templates_dir() / "hooks" / "stop.py", script_dst)
+    script_dst.chmod(0o755)
+
+    # 2. Merge the hook entry into settings.json (preserving existing config).
+    settings_path = project_root / CLAUDE_SETTINGS_REL
+    settings: dict[str, Any] = {}
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8")) or {}
+        except json.JSONDecodeError as exc:
+            console.print(
+                f"[red]Could not parse {CLAUDE_SETTINGS_REL}: {exc}[/red]\n"
+                "[red]Refusing to overwrite. Fix the file and re-run install.[/red]"
+            )
+            raise typer.Exit(1)
+
+    hooks_root = settings.setdefault("hooks", {})
+    stop_entries: list[dict[str, Any]] = hooks_root.setdefault("Stop", [])
+
+    # Strip any prior devlog-installed Stop hook so reinstalls are idempotent.
+    stop_entries[:] = [e for e in stop_entries if not _is_devlog_stop_entry(e)]
+
+    stop_entries.append({
+        "hooks": [
+            {"type": "command", "command": STOP_HOOK_COMMAND}
+        ]
+    })
+
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(
+        json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    return {
+        "event": "Stop",
+        "settings_path": CLAUDE_SETTINGS_REL,
+        "script_path": STOP_HOOK_SCRIPT_REL,
+        "command": STOP_HOOK_COMMAND,
+    }
+
+
+def _is_devlog_stop_entry(entry: dict[str, Any]) -> bool:
+    """Detect a Stop entry installed by devlog by matching the script path
+    in any of its commands."""
+    for h in entry.get("hooks", []):
+        if h.get("type") == "command" and STOP_HOOK_SCRIPT_REL in h.get("command", ""):
+            return True
+    return False
+
+
+def _uninstall_claude_stop_hook(project_root: Path, hook_record: dict[str, Any]) -> list[str]:
+    """Remove a previously-installed Stop hook. Returns a list of human-readable
+    actions taken (for display)."""
+    actions: list[str] = []
+
+    settings_path = project_root / hook_record.get("settings_path", CLAUDE_SETTINGS_REL)
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8")) or {}
+        except json.JSONDecodeError:
+            settings = None
+
+        if isinstance(settings, dict):
+            stop_entries = settings.get("hooks", {}).get("Stop", [])
+            before = len(stop_entries)
+            stop_entries[:] = [e for e in stop_entries if not _is_devlog_stop_entry(e)]
+            if len(stop_entries) < before:
+                # Clean up empty containers so settings.json stays tidy.
+                if not stop_entries:
+                    settings["hooks"].pop("Stop", None)
+                if not settings.get("hooks"):
+                    settings.pop("hooks", None)
+
+                if settings:
+                    settings_path.write_text(
+                        json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
+                        encoding="utf-8",
+                    )
+                    actions.append(f"Removed Stop hook from {hook_record['settings_path']}")
+                else:
+                    settings_path.unlink()
+                    actions.append(f"Removed empty {hook_record['settings_path']}")
+
+    script_path = project_root / hook_record.get("script_path", STOP_HOOK_SCRIPT_REL)
+    if script_path.exists():
+        script_path.unlink()
+        # Drop empty parent dirs (hooks/, then .devlog/ only if empty).
+        parent = script_path.parent
+        while parent != project_root and parent.exists():
+            try:
+                if any(parent.iterdir()):
+                    break
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+        actions.append(f"Removed {hook_record['script_path']}")
+
+    return actions
 
 
 # ── Entry point ──────────────────────────────────────────────────────────

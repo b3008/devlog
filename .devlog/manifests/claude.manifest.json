@@ -1,8 +1,16 @@
 {
   "agent": "claude",
   "version": "0.1.0",
-  "installed_at": "2026-04-16T20:23:18.600367+00:00",
+  "installed_at": "2026-04-16T21:08:54.061430+00:00",
   "files": {
-    "CLAUDE.md": "505d6f4b602e8355c0ae08e28e7402894da0eb814b69a83ca857eee01734104e"
-  }
+    "CLAUDE.md": "836b7461d416cffab0adf248b3ff7e8833c58289f99766c4c09404f625b9aedb"
+  },
+  "hooks": [
+    {
+      "event": "Stop",
+      "settings_path": ".claude/settings.json",
+      "script_path": ".devlog/hooks/stop.py",
+      "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/stop.py\""
+    }
+  ]
 }

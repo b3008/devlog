@@ -123,6 +123,23 @@ grow with the project:
 Together these let the convention absorb what the project has actually been
 doing — without anyone curating `config.yaml` by hand.
 
+### Optional: runtime enforcement (Claude Code)
+
+The convention asks the agent to self-check at the end of each turn, but
+agents can interpret rules differently depending on whether the turn
+produced an artifact. For Claude Code, opt into a Stop hook that injects a
+one-shot reminder before the agent ends its turn:
+
+```bash
+devlog install --ai claude --with-hook
+```
+
+This drops a small script at `.devlog/hooks/stop.py` and merges a `Stop`
+hook entry into `.claude/settings.json` (preserving any existing config).
+Reinstalls are idempotent; `devlog uninstall --ai claude` removes the
+hook entry, deletes the script, and leaves any unrelated settings
+untouched.
+
 ### Is it working?
 
 `devlog status` reports whether entries are actually being produced — not
