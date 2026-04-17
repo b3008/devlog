@@ -18,6 +18,26 @@ dependencies = [
 [project.scripts]
 devlog = "devlog_cli:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# Convention text is embedded markdown — long lines are intentional.
+"src/devlog_cli/convention.py" = ["E501"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
