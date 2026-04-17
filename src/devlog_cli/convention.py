@@ -13,8 +13,12 @@ from typing import Any
 
 import yaml
 
-SENTINEL_START = "<!-- DEVLOG:START - Do not edit this section manually -->"
+SENTINEL_START = "<!-- DEVLOG:START - Do not edit manually. Remove with: devlog uninstall --ai <key> -->"
 SENTINEL_END = "<!-- DEVLOG:END -->"
+
+# Stable substrings for matching — immune to sentinel wording changes.
+_SENTINEL_START_MARKER = "<!-- DEVLOG:START"
+_SENTINEL_END_MARKER = "<!-- DEVLOG:END"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "blog_dir": "blog",
@@ -262,24 +266,20 @@ def inject_convention(existing_content: str, convention: str) -> str:
     """Inject or replace convention text in an existing context file."""
     wrapped = wrap_with_sentinels(convention)
 
-    # If sentinels already exist, replace the section
-    if SENTINEL_START in existing_content:
-        import re
-        pattern = re.escape(SENTINEL_START) + r".*?" + re.escape(SENTINEL_END) + r"\n?"
-        return re.sub(pattern, wrapped, existing_content, flags=re.DOTALL)
+    # Strip ALL existing devlog blocks (handles old sentinel formats and duplicates).
+    cleaned = remove_convention(existing_content) if _SENTINEL_START_MARKER in existing_content else existing_content
 
-    # Otherwise append with a blank line separator
-    if existing_content and not existing_content.endswith("\n"):
-        existing_content += "\n"
-    if existing_content and not existing_content.endswith("\n\n"):
-        existing_content += "\n"
-    return existing_content + wrapped
+    # Append with a blank line separator.
+    if cleaned and not cleaned.endswith("\n"):
+        cleaned += "\n"
+    if cleaned and not cleaned.endswith("\n\n"):
+        cleaned += "\n"
+    return cleaned + wrapped
 
 
 def remove_convention(content: str) -> str:
     """Remove the convention section from a context file."""
-    import re
-    pattern = r"\n?" + re.escape(SENTINEL_START) + r".*?" + re.escape(SENTINEL_END) + r"\n?"
+    pattern = r"\n?" + re.escape(_SENTINEL_START_MARKER) + r"[^\n]*-->" + r".*?" + re.escape(SENTINEL_END) + r"\n?"
     result = re.sub(pattern, "", content, flags=re.DOTALL)
     # Clean up trailing whitespace
     return result.rstrip("\n") + "\n" if result.strip() else ""

@@ -1,4 +1,4 @@
-<!-- DEVLOG:START - Do not edit this section manually -->
+<!-- DEVLOG:START - Do not edit manually. Remove with: devlog uninstall --ai <key> -->
 ## Development Blog (Automatic)
 
 This project keeps a development blog in `blog/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion — not only code or files produced. If it did, write or update the blog entry as part of the same turn — don't defer it to a future session and don't wait to be asked.

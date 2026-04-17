@@ -7,7 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from devlog_cli import app
-from devlog_cli.convention import SENTINEL_END, SENTINEL_START
+from devlog_cli.convention import _SENTINEL_START_MARKER, SENTINEL_END
 
 runner = CliRunner()
 
@@ -41,7 +41,7 @@ class TestInstall:
         result = runner.invoke(app, ["install", "--ai", "claude"])
         assert result.exit_code == 0
         claude_md = (initialized_project / "CLAUDE.md").read_text()
-        assert SENTINEL_START in claude_md
+        assert _SENTINEL_START_MARKER in claude_md
         assert SENTINEL_END in claude_md
 
     def test_preserves_existing_content(self, initialized_project: Path):
@@ -50,12 +50,12 @@ class TestInstall:
         runner.invoke(app, ["install", "--ai", "claude"])
         content = claude_md.read_text()
         assert "# My Rules" in content
-        assert SENTINEL_START in content
+        assert _SENTINEL_START_MARKER in content
 
     def test_reinstall_replaces(self, installed_project: Path):
         runner.invoke(app, ["install", "--ai", "claude"])
         content = (installed_project / "CLAUDE.md").read_text()
-        assert content.count(SENTINEL_START) == 1
+        assert content.count(_SENTINEL_START_MARKER) == 1
 
     def test_auto_init(self, project_dir: Path):
         result = runner.invoke(app, ["install", "--ai", "claude"])
@@ -148,7 +148,7 @@ class TestUninstall:
         runner.invoke(app, ["uninstall", "--ai", "claude"])
         content = claude_md.read_text()
         assert "# My Rules" in content
-        assert SENTINEL_START not in content
+        assert _SENTINEL_START_MARKER not in content
 
     def test_removes_hook(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
@@ -206,7 +206,7 @@ class TestGlobalInstall:
         claude_md = project_dir / "CLAUDE.md"
         assert claude_md.exists()
         content = claude_md.read_text()
-        assert SENTINEL_START in content
+        assert _SENTINEL_START_MARKER in content
         assert "Every project" in content  # global opener wording
 
     def test_includes_bootstrap_section(self, project_dir: Path, monkeypatch):
@@ -242,7 +242,7 @@ class TestGlobalInstall:
         runner.invoke(app, ["install", "--ai", "claude", "--global"])
         content = claude_md.read_text()
         assert "# My global rules" in content
-        assert SENTINEL_START in content
+        assert _SENTINEL_START_MARKER in content
 
 
 class TestGlobalUninstall:

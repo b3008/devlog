@@ -65,7 +65,7 @@ file — leaving whatever you already had intact:
   # My Project
   <existing CLAUDE.md content stays untouched>
 +
-+ <!-- DEVLOG:START - Do not edit this section manually -->
++ <!-- DEVLOG:START - Do not edit manually. Remove with: devlog uninstall --ai <key> -->
 + ## Development Blog (Automatic)
 + After every session where meaningful progress is made, create or
 + update a blog entry in `blog/`.

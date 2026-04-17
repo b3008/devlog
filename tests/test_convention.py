@@ -4,9 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from devlog_cli.convention import (
+    _SENTINEL_START_MARKER,
     DEFAULT_CONFIG,
     SENTINEL_END,
-    SENTINEL_START,
     _extract_frontmatter,
     discover_tags,
     generate_convention,
@@ -129,7 +129,7 @@ class TestGenerateConvention:
 class TestInjection:
     def test_inject_into_empty(self):
         result = inject_convention("", "convention text")
-        assert SENTINEL_START in result
+        assert _SENTINEL_START_MARKER in result
         assert SENTINEL_END in result
         assert "convention text" in result
 
@@ -145,12 +145,12 @@ class TestInjection:
         assert "second" in second
         assert "first" not in second
         # Only one sentinel pair.
-        assert second.count(SENTINEL_START) == 1
+        assert second.count(_SENTINEL_START_MARKER) == 1
 
     def test_remove(self):
         injected = inject_convention("# Title\n", "convention text")
         removed = remove_convention(injected)
-        assert SENTINEL_START not in removed
+        assert _SENTINEL_START_MARKER not in removed
         assert "convention text" not in removed
         assert "# Title" in removed
 
