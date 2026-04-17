@@ -41,6 +41,19 @@ uv tool install git+https://github.com/b3008/devlog.git
 devlog init && devlog install --ai claude
 ```
 
+### One-time global setup (Claude Code)
+
+Install once and every project gets a blog — no per-project install needed:
+
+```bash
+devlog install --ai claude --global --with-hook
+```
+
+This injects the convention into `~/.claude/CLAUDE.md` with self-bootstrapping
+instructions: the agent creates `blog/`, `.devlog/`, and `learned.md` on its
+first entry in any project. Per-project customization is still available via
+`devlog init` + config edits in any repo.
+
 <br>
 
 ## What actually happens
@@ -91,7 +104,9 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 | --- | --- |
 | `devlog init [--name NAME]` | Scaffold `.devlog/`, `blog/`, `blog/media/`, `blog/_index.md`, and `.devlog/learned.md`. |
 | `devlog install --ai <key>` | Inject the convention into the agent's context file. Auto-runs `init` if needed. |
+| `devlog install --ai claude --global` | Install into `~/.claude/CLAUDE.md` so the convention applies to every project. |
 | `devlog uninstall --ai <key>` | Remove the convention section and manifest. |
+| `devlog uninstall --ai claude --global` | Remove the global convention from `~/.claude/`. |
 | `devlog list` | List all supported agents. |
 | `devlog status` | Show which agents currently have the convention active. |
 | `devlog version` | Print version. |

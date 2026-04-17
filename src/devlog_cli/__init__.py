@@ -24,7 +24,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
-from devlog_cli.agents import AGENTS, get_agent
+from devlog_cli.agents import AGENTS, AgentConfig, get_agent
 from devlog_cli.convention import (
     SENTINEL_START,
     discover_tags,
@@ -137,21 +137,33 @@ def install(
         "--with-hook",
         help="(claude only) Also install a Stop hook that reminds the agent to check for blog-worthy turns.",
     ),
+    global_: bool = typer.Option(
+        False,
+        "--global",
+        help="(claude only) Install into ~/.claude/ so the convention applies to every project.",
+    ),
 ) -> None:
     """Inject the blog convention into an agent's context file."""
-    project_root = Path.cwd()
-
     try:
         agent = get_agent(ai)
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1)
 
-    if with_hook and ai != "claude":
-        console.print(
-            f"[red]--with-hook is only supported for the 'claude' agent right now (got {ai!r}).[/red]"
-        )
+    if (with_hook or global_) and ai != "claude":
+        flag = "--global" if global_ else "--with-hook"
+        console.print(f"[red]{flag} is only supported for the 'claude' agent right now (got {ai!r}).[/red]")
         raise typer.Exit(1)
+
+    if global_:
+        _install_global(agent, with_hook=with_hook)
+    else:
+        _install_local(agent, with_hook=with_hook)
+
+
+def _install_local(agent: AgentConfig, *, with_hook: bool) -> None:
+    """Per-project install: inject convention into the project's context file."""
+    project_root = Path.cwd()
 
     # Check if devlog is initialized
     config_path = project_root / ".devlog" / "config.yaml"
@@ -162,7 +174,7 @@ def install(
         console.print()
 
     # Check for existing manifest
-    manifest_path = project_root / ".devlog" / "manifests" / f"{ai}.manifest.json"
+    manifest_path = project_root / ".devlog" / "manifests" / f"{agent.key}.manifest.json"
     if manifest_path.exists():
         console.print(f"[yellow]{agent.name} convention already installed. Reinstalling...[/yellow]")
 
@@ -181,7 +193,7 @@ def install(
         config["tags"] = sorted(base_tags | discovered)
 
     convention_text = generate_convention(config)
-    manifest = Manifest(agent_key=ai, project_root=project_root, version=__version__)
+    manifest = Manifest(agent_key=agent.key, project_root=project_root, version=__version__)
 
     tree = Tree(f"[bold green]Installing devlog convention[/bold green] — {agent.name}")
     if new_tags:
@@ -219,10 +231,65 @@ def install(
         f"[green]Done.[/green] {agent.name} will now maintain a development blog "
         f"in [cyan]{config['blog_dir']}/[/cyan]."
     )
-    if not with_hook and ai == "claude":
+    if not with_hook and agent.key == "claude":
         console.print(
             "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a Claude Code "
             "Stop hook that nudges the agent before each turn ends.[/dim]"
+        )
+
+
+def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
+    """Global install: inject convention into ~/.claude/CLAUDE.md so it applies to every project."""
+    from devlog_cli.convention import DEFAULT_CONFIG
+
+    home = Path.home()
+    config = dict(DEFAULT_CONFIG)
+    convention_text = generate_convention(config, global_mode=True)
+
+    manifest = Manifest(agent_key=agent.key, project_root=home, version=__version__)
+
+    # Check for existing global manifest
+    if manifest.manifest_path.exists():
+        console.print(f"[yellow]{agent.name} global convention already installed. Reinstalling...[/yellow]")
+
+    tree = Tree(f"[bold green]Installing devlog convention (global)[/bold green] — {agent.name}")
+
+    # Inject into ~/.claude/CLAUDE.md
+    ctx_path = home / agent.context_file
+    if ctx_path.exists():
+        existing = ctx_path.read_text(encoding="utf-8")
+        new_content = inject_convention(existing, convention_text)
+    else:
+        new_content = inject_convention("", convention_text)
+
+    ctx_path.parent.mkdir(parents=True, exist_ok=True)
+    ctx_path.write_text(new_content, encoding="utf-8")
+    manifest.files[agent.context_file] = Manifest._sha256(new_content)
+    tree.add(f"[green]Injected convention into ~/{agent.context_file}[/green]")
+
+    # Optionally install the global Stop hook
+    if with_hook:
+        hook_record = _install_claude_stop_hook(home, global_mode=True)
+        manifest.hooks.append(hook_record)
+        tree.add(
+            f"[green]Installed global Stop hook[/green] "
+            f"([dim]~/{hook_record['script_path']} \u2192 ~/{hook_record['settings_path']}[/dim])"
+        )
+
+    manifest.save()
+    tree.add("[dim]Manifest saved[/dim]")
+
+    console.print()
+    console.print(tree)
+    console.print()
+    console.print(
+        "[green]Done.[/green] Every project will now get a development blog.\n"
+        "[dim]Per-project customization: run [cyan]devlog init[/cyan] in any project to drop a "
+        ".devlog/config.yaml with custom triggers, voice, and tags.[/dim]"
+    )
+    if not with_hook:
+        console.print(
+            "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a global Stop hook.[/dim]"
         )
 
 
@@ -232,54 +299,65 @@ def install(
 @app.command()
 def uninstall(
     ai: str = typer.Option(..., "--ai", help="AI agent key to remove convention from."),
+    global_: bool = typer.Option(
+        False,
+        "--global",
+        help="(claude only) Remove the global convention from ~/.claude/.",
+    ),
 ) -> None:
     """Remove the blog convention from an agent's context file."""
-    project_root = Path.cwd()
-
     try:
         agent = get_agent(ai)
     except KeyError as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1)
 
-    manifest_path = project_root / ".devlog" / "manifests" / f"{ai}.manifest.json"
-    if not manifest_path.exists():
-        console.print(f"[red]No manifest found for {agent.name}. Not installed?[/red]")
+    if global_ and ai != "claude":
+        console.print(f"[red]--global is only supported for 'claude' right now (got {ai!r}).[/red]")
         raise typer.Exit(1)
 
-    manifest = Manifest.load(manifest_path, project_root)
+    root_dir = Path.home() if global_ else Path.cwd()
+    ctx_display_prefix = "~/" if global_ else ""
+
+    manifest_path = root_dir / ".devlog" / "manifests" / f"{ai}.manifest.json"
+    if not manifest_path.exists():
+        scope = "global " if global_ else ""
+        console.print(f"[red]No {scope}manifest found for {agent.name}. Not installed?[/red]")
+        raise typer.Exit(1)
+
+    manifest = Manifest.load(manifest_path, root_dir)
 
     # Remove convention from context file
-    ctx_path = project_root / agent.context_file
+    ctx_path = root_dir / agent.context_file
     if ctx_path.exists():
         content = ctx_path.read_text(encoding="utf-8")
         if SENTINEL_START in content:
             new_content = remove_convention(content)
             if new_content.strip():
                 ctx_path.write_text(new_content, encoding="utf-8")
-                console.print(f"[green]Removed convention from {agent.context_file}[/green]")
+                console.print(f"[green]Removed convention from {ctx_display_prefix}{agent.context_file}[/green]")
             else:
-                # Context file is now empty — remove it
                 ctx_path.unlink()
-                console.print(f"[green]Removed {agent.context_file} (was empty after removal)[/green]")
+                console.print(
+                    f"[green]Removed {ctx_display_prefix}{agent.context_file} (was empty after removal)[/green]"
+                )
         else:
-            console.print(f"[yellow]No devlog section found in {agent.context_file}[/yellow]")
+            console.print(f"[yellow]No devlog section found in {ctx_display_prefix}{agent.context_file}[/yellow]")
     else:
-        console.print(f"[yellow]{agent.context_file} not found[/yellow]")
+        console.print(f"[yellow]{ctx_display_prefix}{agent.context_file} not found[/yellow]")
 
     # Remove any installed hooks recorded in the manifest
     if manifest is not None:
         for hook in manifest.hooks:
             if hook.get("event") == "Stop" and ai == "claude":
-                for action in _uninstall_claude_stop_hook(project_root, hook):
+                for action in _uninstall_claude_stop_hook(root_dir, hook):
                     console.print(f"[green]{action}[/green]")
 
     # Clean up manifest
     if manifest_path.exists():
         manifest_path.unlink()
-        # Clean empty parent dirs
         parent = manifest_path.parent
-        while parent != project_root and parent.exists():
+        while parent != root_dir and parent.exists():
             try:
                 if any(parent.iterdir()):
                     break
@@ -288,7 +366,8 @@ def uninstall(
                 break
             parent = parent.parent
 
-    console.print(f"[green]Done. {agent.name} convention uninstalled.[/green]")
+    scope = "global " if global_ else ""
+    console.print(f"[green]Done. {agent.name} {scope}convention uninstalled.[/green]")
 
 
 # ── List command ─────────────────────────────────────────────────────────
@@ -420,29 +499,34 @@ def _templates_dir() -> Path:
 
 CLAUDE_SETTINGS_REL = ".claude/settings.json"
 STOP_HOOK_SCRIPT_REL = ".devlog/hooks/stop.py"
-STOP_HOOK_COMMAND = f'python3 "$CLAUDE_PROJECT_DIR/{STOP_HOOK_SCRIPT_REL}"'
+STOP_HOOK_COMMAND_LOCAL = f'python3 "$CLAUDE_PROJECT_DIR/{STOP_HOOK_SCRIPT_REL}"'
+STOP_HOOK_COMMAND_GLOBAL = f'python3 "$HOME/{STOP_HOOK_SCRIPT_REL}"'
 
 
-def _install_claude_stop_hook(project_root: Path) -> dict[str, Any]:
-    """Copy the stop hook script and register it in .claude/settings.json.
+def _install_claude_stop_hook(root_dir: Path, *, global_mode: bool = False) -> dict[str, Any]:
+    """Copy the stop hook script and register it in settings.json.
 
+    root_dir is the project root (per-project) or Path.home() (global).
     Returns a hook record suitable for storage in the manifest.
     """
+    command = STOP_HOOK_COMMAND_GLOBAL if global_mode else STOP_HOOK_COMMAND_LOCAL
+
     # 1. Copy the hook script.
-    script_dst = project_root / STOP_HOOK_SCRIPT_REL
+    script_dst = root_dir / STOP_HOOK_SCRIPT_REL
     script_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(_templates_dir() / "hooks" / "stop.py", script_dst)
     script_dst.chmod(0o755)
 
     # 2. Merge the hook entry into settings.json (preserving existing config).
-    settings_path = project_root / CLAUDE_SETTINGS_REL
+    settings_path = root_dir / CLAUDE_SETTINGS_REL
     settings: dict[str, Any] = {}
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text(encoding="utf-8")) or {}
         except json.JSONDecodeError as exc:
+            settings_rel = f"~/{CLAUDE_SETTINGS_REL}" if global_mode else CLAUDE_SETTINGS_REL
             console.print(
-                f"[red]Could not parse {CLAUDE_SETTINGS_REL}: {exc}[/red]\n"
+                f"[red]Could not parse {settings_rel}: {exc}[/red]\n"
                 "[red]Refusing to overwrite. Fix the file and re-run install.[/red]"
             )
             raise typer.Exit(1)
@@ -455,7 +539,7 @@ def _install_claude_stop_hook(project_root: Path) -> dict[str, Any]:
 
     stop_entries.append({
         "hooks": [
-            {"type": "command", "command": STOP_HOOK_COMMAND}
+            {"type": "command", "command": command}
         ]
     })
 
@@ -469,7 +553,7 @@ def _install_claude_stop_hook(project_root: Path) -> dict[str, Any]:
         "event": "Stop",
         "settings_path": CLAUDE_SETTINGS_REL,
         "script_path": STOP_HOOK_SCRIPT_REL,
-        "command": STOP_HOOK_COMMAND,
+        "command": command,
     }
 
 

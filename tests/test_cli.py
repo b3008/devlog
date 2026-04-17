@@ -198,6 +198,74 @@ class TestStatus:
         assert "no entries yet" in result.output
 
 
+class TestGlobalInstall:
+    def test_creates_global_claude_md(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        result = runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        assert result.exit_code == 0
+        claude_md = project_dir / "CLAUDE.md"
+        assert claude_md.exists()
+        content = claude_md.read_text()
+        assert SENTINEL_START in content
+        assert "Every project" in content  # global opener wording
+
+    def test_includes_bootstrap_section(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        content = (project_dir / "CLAUDE.md").read_text()
+        assert "First-time setup" in content
+        assert ".devlog/config.yaml" in content
+
+    def test_with_hook_global(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        result = runner.invoke(app, ["install", "--ai", "claude", "--global", "--with-hook"])
+        assert result.exit_code == 0
+        assert (project_dir / ".devlog" / "hooks" / "stop.py").exists()
+        settings = json.loads((project_dir / ".claude" / "settings.json").read_text())
+        command = settings["hooks"]["Stop"][0]["hooks"][0]["command"]
+        assert "$HOME/" in command  # global hook uses $HOME, not $CLAUDE_PROJECT_DIR
+
+    def test_manifest_in_home(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        manifest = project_dir / ".devlog" / "manifests" / "claude.manifest.json"
+        assert manifest.exists()
+
+    def test_rejected_for_non_claude(self, project_dir: Path):
+        result = runner.invoke(app, ["install", "--ai", "copilot", "--global"])
+        assert result.exit_code == 1
+
+    def test_preserves_existing_global_content(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        claude_md = project_dir / "CLAUDE.md"
+        claude_md.write_text("# My global rules\n")
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        content = claude_md.read_text()
+        assert "# My global rules" in content
+        assert SENTINEL_START in content
+
+
+class TestGlobalUninstall:
+    def test_removes_global_convention(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        result = runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
+        assert result.exit_code == 0
+        # CLAUDE.md was devlog-only, so file should be removed
+        assert not (project_dir / "CLAUDE.md").exists()
+
+    def test_removes_global_hook(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global", "--with-hook"])
+        runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
+        assert not (project_dir / ".devlog" / "hooks" / "stop.py").exists()
+
+    def test_global_uninstall_not_installed(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        result = runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
+        assert result.exit_code == 1
+
+
 class TestListAgents:
     def test_lists_agents(self, project_dir: Path):
         result = runner.invoke(app, ["list"])
