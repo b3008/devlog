@@ -26,7 +26,7 @@ from rich.tree import Tree
 
 from devlog_cli.agents import AGENTS, AgentConfig, get_agent
 from devlog_cli.convention import (
-    SENTINEL_START,
+    _SENTINEL_START_MARKER,
     discover_tags,
     generate_convention,
     inject_convention,
@@ -331,7 +331,7 @@ def uninstall(
     ctx_path = root_dir / agent.context_file
     if ctx_path.exists():
         content = ctx_path.read_text(encoding="utf-8")
-        if SENTINEL_START in content:
+        if _SENTINEL_START_MARKER in content:
             new_content = remove_convention(content)
             if new_content.strip():
                 ctx_path.write_text(new_content, encoding="utf-8")
@@ -439,7 +439,7 @@ def status() -> None:
             continue
 
         ctx_path = project_root / agent.context_file
-        if ctx_path.exists() and SENTINEL_START in ctx_path.read_text(encoding="utf-8"):
+        if ctx_path.exists() and _SENTINEL_START_MARKER in ctx_path.read_text(encoding="utf-8"):
             status_text = "[green]active[/green]"
         else:
             status_text = "[red]missing[/red]"
