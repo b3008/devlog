@@ -249,6 +249,26 @@ section.
 
 <br>
 
+## Uninstalling
+
+```bash
+# Remove from a specific project
+devlog uninstall --ai claude
+
+# Remove the global install
+devlog uninstall --ai claude --global
+```
+
+This removes the sentinel block from the context file, the Stop hook (if
+installed) from `settings.json`, the hook script, and the manifest. Your
+blog entries, `.devlog/config.yaml`, and `.devlog/learned.md` are left
+untouched — they're your data, not ours.
+
+If the context file (`CLAUDE.md`, `AGENTS.md`, etc.) is empty after
+removing the devlog section, it's deleted automatically.
+
+<br>
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
