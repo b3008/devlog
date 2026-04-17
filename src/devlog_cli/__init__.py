@@ -388,8 +388,10 @@ def status() -> None:
                 f"No entries written since install ({days} day{'s' if days != 1 else ''} ago).\n"
                 f"The convention may not be firing. Things to try:\n"
                 f"  \u2022 Start a fresh agent session (context files are usually read at session start).\n"
-                f"  \u2022 Nudge the agent: [cyan]\"check if this session warrants a devlog entry and write one if so\"[/cyan]\n"
-                f"  \u2022 If the defaults don't fit your project, edit [cyan].devlog/config.yaml[/cyan] and re-run install.",
+                f"  \u2022 Nudge the agent: [cyan]\"check if this session warrants"
+                f" a devlog entry and write one if so\"[/cyan]\n"
+                f"  \u2022 If the defaults don't fit your project, edit"
+                f" [cyan].devlog/config.yaml[/cyan] and re-run install.",
                 title="[yellow]Warning[/yellow]",
                 border_style="yellow",
             ))

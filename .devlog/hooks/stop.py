@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import sys
 
-
 REMINDER = (
     "devlog reminder: before ending this turn, check whether anything in "
     "this session hit a trigger from CLAUDE.md's 'When to write an entry' "

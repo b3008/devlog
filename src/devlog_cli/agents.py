@@ -8,7 +8,6 @@ The convention text gets injected into these files.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
