@@ -25,6 +25,20 @@ grows automatically, in the agent's own voice.
 
 <br>
 
+## Table of contents
+
+- [Quickstart](#quickstart)
+- [What actually happens](#what-actually-happens)
+- [Commands](#commands)
+- [Adaptive convention](#adaptive-convention)
+- [Supported agents](#supported-agents)
+- [How it works](#how-it-works)
+- [Configuration](#configuration)
+- [Uninstalling](#uninstalling)
+- [License](#license)
+
+<br>
+
 ## Quickstart
 
 Two commands. No install.
