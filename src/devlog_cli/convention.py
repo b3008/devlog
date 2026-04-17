@@ -139,8 +139,11 @@ def discover_tags(project_root: Path, config: dict[str, Any]) -> list[str]:
     return sorted(discovered)
 
 
-def generate_convention(config: dict[str, Any]) -> str:
-    """Generate the blog convention markdown from config."""
+def generate_convention(config: dict[str, Any], *, global_mode: bool = False) -> str:
+    """Generate the blog convention markdown from config.
+
+    When global_mode is True, the convention includes self-bootstrapping
+    instructions and per-project config override guidance."""
     blog_dir = config["blog_dir"]
     media_dir = config["media_dir"]
     sections = config["sections"]
@@ -183,10 +186,29 @@ def generate_convention(config: dict[str, Any]) -> str:
             media_lines.append(f"   - {instruction.format(media_dir=media_dir)}")
     media_block = "\n".join(media_lines)
 
-    text = f"""\
+    # Build opener — varies between per-project and global mode.
+    if global_mode:
+        opener = f"""\
 ## Development Blog (Automatic)
 
-This project keeps a development blog in `{blog_dir}/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion \u2014 not only code or files produced. If it did, write or update the blog entry as part of the same turn \u2014 don't defer it to a future session and don't wait to be asked.
+Every project you work on keeps a development blog in `{blog_dir}/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion \u2014 not only code or files produced. If it did, write or update the blog entry as part of the same turn \u2014 don't defer it to a future session and don't wait to be asked.
+
+### First-time setup (per project)
+
+If the current project does not yet have a `{blog_dir}/` directory, scaffold it before writing the first entry:
+1. Create `{blog_dir}/`, `{blog_dir}/media/`, and `.devlog/`.
+2. Create `{blog_dir}/{config.get("index_file", "_index.md")}` with a heading using the project\u2019s directory name.
+3. Copy `.devlog/learned.md` from the template below or create an empty one with section headings: Glossary, Entities, Recurring themes, Open threads.
+
+If the project has a `.devlog/config.yaml`, use its settings for triggers, voice, and tags **instead of** the defaults below. If it doesn\u2019t, use the defaults."""
+    else:
+        opener = f"""\
+## Development Blog (Automatic)
+
+This project keeps a development blog in `{blog_dir}/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion \u2014 not only code or files produced. If it did, write or update the blog entry as part of the same turn \u2014 don't defer it to a future session and don't wait to be asked."""
+
+    text = f"""\
+{opener}
 
 ### When to write an entry
 

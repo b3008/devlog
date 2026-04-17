@@ -28,9 +28,11 @@ def initialized_project(project_dir: Path) -> Path:
 @pytest.fixture()
 def installed_project(initialized_project: Path) -> Path:
     """A project directory with `devlog install --ai claude` already run."""
-    from devlog_cli import install
+    from typer.testing import CliRunner
 
-    install(ai="claude", with_hook=False)
+    from devlog_cli import app
+
+    CliRunner().invoke(app, ["install", "--ai", "claude"])
     return initialized_project
 
 

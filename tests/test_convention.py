@@ -106,6 +106,22 @@ class TestGenerateConvention:
         assert "`alpha`" in text
         assert "`beta`" in text
 
+    def test_global_mode_opener(self):
+        text = generate_convention(DEFAULT_CONFIG, global_mode=True)
+        assert "Every project" in text
+        assert "First-time setup" in text
+        assert ".devlog/config.yaml" in text
+
+    def test_global_mode_still_has_triggers(self):
+        text = generate_convention(DEFAULT_CONFIG, global_mode=True)
+        assert "### When to write an entry" in text
+        assert "### Voice and audience" in text
+
+    def test_local_mode_no_bootstrap(self):
+        text = generate_convention(DEFAULT_CONFIG, global_mode=False)
+        assert "First-time setup" not in text
+        assert "This project keeps" in text
+
 
 # ── Convention injection / removal ───────────────────────────────────────
 
