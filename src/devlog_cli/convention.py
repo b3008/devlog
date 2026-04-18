@@ -30,12 +30,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         {"name": "Why it matters", "description": "significance for the project, users, or architecture"},
         {"name": "How it works", "description": "brief technical explanation (portfolio audience: technical but not necessarily familiar with the codebase)"},
         {"name": "What's next", "description": "open threads or future directions"},
+        {"name": "Surprises", "description": "anything unexpected — a search that led to an insight, an approach that failed, a misconception corrected (skip if the session was routine)"},
     ],
     "voice": [
         "Portfolio-oriented: write for someone evaluating the work (potential collaborators, employers, researchers, or AI agents picking up the project later)",
         "Narrative, not changelog: explain the *why* and *so what*, not just the *what*",
         "Concrete over abstract: reference specific files, show output examples, describe real problems solved",
         "Honest about tradeoffs: mention what didn't work, what was scrappy, what's still rough",
+        "First-hand, not reconstructed: narrate from what you observed during the session — the reasoning, the alternatives, the surprises — not from commit messages or diffs after the fact",
     ],
     "triggers": [
         "New feature or command implemented",
@@ -53,6 +55,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "testing",
         "documentation",
         "infrastructure",
+        "research",
         "ux",
         "demo",
     ],
