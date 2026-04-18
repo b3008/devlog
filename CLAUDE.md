@@ -41,6 +41,7 @@ summary: "One-sentence summary of what was accomplished and why it matters."
    - **Why it matters** — significance for the project, users, or architecture
    - **How it works** — brief technical explanation (portfolio audience: technical but not necessarily familiar with the codebase)
    - **What's next** — open threads or future directions
+   - **Surprises** — anything unexpected — a search that led to an insight, an approach that failed, a misconception corrected (skip if the session was routine)
 
 5. **Capture rich media** — screenshots and visuals are critical for portfolio impact:
    - Take screenshots of CLI output, generated files, or workflow artifacts
@@ -56,10 +57,11 @@ summary: "One-sentence summary of what was accomplished and why it matters."
 - **Narrative, not changelog**: explain the *why* and *so what*, not just the *what*
 - **Concrete over abstract**: reference specific files, show output examples, describe real problems solved
 - **Honest about tradeoffs**: mention what didn't work, what was scrappy, what's still rough
+- **First-hand, not reconstructed**: narrate from what you observed during the session — the reasoning, the alternatives, the surprises — not from commit messages or diffs after the fact
 
 ### Available tags
 
-`architecture`, `bug-fix`, `cli`, `demo`, `documentation`, `feature`, `infrastructure`, `refactor`, `testing`, `ux`
+`architecture`, `bug-fix`, `cli`, `demo`, `documentation`, `feature`, `infrastructure`, `refactor`, `research`, `testing`, `ux`
 
 Prefer tags from this list. If a new tag genuinely fits and recurs, use it in the entry's frontmatter — it will be folded into this list automatically on the next `devlog install`.
 <!-- DEVLOG:END -->

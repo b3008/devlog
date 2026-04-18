@@ -16,6 +16,8 @@ sections:
     description: "brief technical explanation (portfolio audience: technical but not necessarily familiar with the codebase)"
   - name: "What's next"
     description: "open threads or future directions"
+  - name: "Surprises"
+    description: "anything unexpected — a search that led to an insight, an approach that failed, a misconception corrected (skip if the session was routine)"
 
 # Voice and audience guidelines
 voice:
@@ -23,6 +25,7 @@ voice:
   - "Narrative, not changelog: explain the *why* and *so what*, not just the *what*"
   - "Concrete over abstract: reference specific files, show output examples, describe real problems solved"
   - "Honest about tradeoffs: mention what didn't work, what was scrappy, what's still rough"
+  - "First-hand, not reconstructed: narrate from what you observed during the session — the reasoning, the alternatives, the surprises — not from commit messages or diffs after the fact"
 
 # When should the agent write a blog entry
 triggers:
@@ -42,6 +45,7 @@ tags:
   - testing
   - documentation
   - infrastructure
+  - research
   - ux
   - demo
 
