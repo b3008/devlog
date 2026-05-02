@@ -4,7 +4,13 @@ description: Read the project's devlog (blog/) and learned.md to gain context on
 
 Read the devlog and report back so the rest of this session has full context for what we've been working on.
 
-Steps:
+## Preflight
+
+If `blog/` does not exist, or it exists but has no entries beyond `_index.md`, this project does not have a devlog yet. Report that briefly and stop — there is nothing to catch up on. Suggest the user run `/devlog-write <topic>` if they want to start one (which will scaffold the project on first use). Do not scaffold anything yourself; this command is read-only.
+
+Otherwise, proceed.
+
+## Steps
 
 1. Read `blog/_index.md` to see the entry list.
 2. Read the 5 most recent entries (or all of them if fewer than 5).

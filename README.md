@@ -135,6 +135,13 @@ Installing for Claude Code also drops three slash commands into
 They give you direct, on-demand control over the blog from inside any
 Claude Code session — no flag needed, they ship by default.
 
+In a project that hasn't been initialized yet, `/devlog-write` will
+bootstrap the scaffolding (`.devlog/`, `blog/`, `learned.md`) on first
+use — following the global convention's First-time setup instructions
+or running `devlog init` if it's available. `/devlog-catchup` and
+`/devlog-manicure` are read-only; they report "no devlog yet" and exit
+gracefully if the project hasn't been scaffolded.
+
 | Command | What it does |
 | --- | --- |
 | `/devlog-catchup` | Reads `blog/_index.md`, the 5 most recent entries, and `.devlog/learned.md`, then returns a structured project briefing — project arc, recent work, open threads, glossary highlights. Use at the start of a session to load context. |
