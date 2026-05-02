@@ -1,23 +1,33 @@
 {
   "agent": "claude",
   "version": "0.1.0",
-  "installed_at": "2026-05-02T08:41:47.870230+00:00",
+  "installed_at": "2026-05-02T08:53:35.362867+00:00",
   "files": {
     "CLAUDE.md": "b37c32897a761b9902c2db5c53f6e60b2a6c339687a54319f991b1f6160a17c4"
   },
-  "hooks": [],
+  "hooks": [
+    {
+      "event": "Stop",
+      "settings_path": ".claude/settings.json",
+      "script_path": ".devlog/hooks/stop.py",
+      "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/stop.py\""
+    }
+  ],
   "commands": [
     {
       "name": "devlog-catchup",
-      "path": ".claude/commands/devlog-catchup.md"
+      "path": ".claude/commands/devlog-catchup.md",
+      "sha256": "19252df450e95c11d206d14e13841e81300a3eda427cc553fc32023ee6a4362e"
     },
     {
       "name": "devlog-manicure",
-      "path": ".claude/commands/devlog-manicure.md"
+      "path": ".claude/commands/devlog-manicure.md",
+      "sha256": "0bbcde3fe751130ec8981c1682c261a2f72342ca6665647e8ff5ebc3bd8a584d"
     },
     {
       "name": "devlog-write",
-      "path": ".claude/commands/devlog-write.md"
+      "path": ".claude/commands/devlog-write.md",
+      "sha256": "3b4554e5d380b5b47193727bbe3e938b945b63949173c6427fca3663e9a092bc"
     }
   ]
 }

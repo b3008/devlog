@@ -212,6 +212,81 @@ class TestSlashCommands:
         runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
         assert not (project_dir / ".claude" / "commands" / "devlog-catchup.md").exists()
 
+    def test_manifest_records_command_hashes(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        data = json.loads(
+            (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text()
+        )
+        for cmd in data["commands"]:
+            assert "sha256" in cmd
+            assert len(cmd["sha256"]) == 64
+
+    def test_reinstall_preserves_user_customization(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        cmd_file.write_text("# my custom version\n", encoding="utf-8")
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert cmd_file.read_text(encoding="utf-8") == "# my custom version\n"
+        assert "Preserved" in result.output
+
+    def test_uninstall_preserves_user_customization(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        cmd_file.write_text("# my custom version\n", encoding="utf-8")
+        result = runner.invoke(app, ["uninstall", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert cmd_file.exists()
+        assert cmd_file.read_text(encoding="utf-8") == "# my custom version\n"
+
+    def test_reinstall_removes_orphaned_command(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        # Simulate a previous version that shipped an extra slash command:
+        # add an orphan file plus a manifest entry pointing at it.
+        orphan = initialized_project / ".claude" / "commands" / "devlog-zombie.md"
+        orphan.write_text("ghost from a prior release\n", encoding="utf-8")
+        import hashlib
+
+        orphan_hash = hashlib.sha256(orphan.read_text().encode()).hexdigest()
+        data = json.loads(manifest_path.read_text())
+        data["commands"].append({
+            "name": "devlog-zombie",
+            "path": ".claude/commands/devlog-zombie.md",
+            "sha256": orphan_hash,
+        })
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert not orphan.exists()
+        # And the manifest stops tracking it.
+        new_data = json.loads(manifest_path.read_text())
+        assert "devlog-zombie" not in {c["name"] for c in new_data["commands"]}
+
+    def test_reinstall_preserves_modified_orphan(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        orphan = initialized_project / ".claude" / "commands" / "devlog-zombie.md"
+        orphan.write_text("original ghost\n", encoding="utf-8")
+        import hashlib
+
+        original_hash = hashlib.sha256("original ghost\n".encode()).hexdigest()
+        data = json.loads(manifest_path.read_text())
+        data["commands"].append({
+            "name": "devlog-zombie",
+            "path": ".claude/commands/devlog-zombie.md",
+            "sha256": original_hash,
+        })
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        # User customized it after install; reinstall must not delete their edits.
+        orphan.write_text("user-edited ghost\n", encoding="utf-8")
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert orphan.exists()
+        assert orphan.read_text() == "user-edited ghost\n"
+
 
 class TestUninstall:
     def test_removes_convention(self, installed_project: Path):

@@ -28,7 +28,9 @@ class Manifest:
         #              "script_path": ".devlog/hooks/stop.py", "command": "python3 ..."}
         self.hooks: list[dict[str, Any]] = []
         # Slash commands installed into agent command directories.
-        # Each entry: {"name": "devlog-catchup", "path": ".claude/commands/devlog-catchup.md"}
+        # Each entry: {"name": "devlog-catchup", "path": ".claude/commands/devlog-catchup.md",
+        #              "sha256": "<hash of the file contents at install time>"}
+        # The hash lets reinstall/uninstall detect user customizations and skip overwriting them.
         self.commands: list[dict[str, Any]] = []
 
     @property
