@@ -696,31 +696,40 @@ def _install_claude_commands(
     dst_dir = root_dir / CLAUDE_COMMANDS_DIR_REL
 
     previous = previous or []
+
+    # If templates aren't shipped with this build (packaging error, incomplete
+    # checkout), pass the previous records through untouched. Reconciliation
+    # would otherwise treat every tracked command as an orphan and delete user
+    # files on what is really a broken install — a net-destructive failure mode.
+    if not src_dir.is_dir():
+        return list(previous), [], []
+
     prev_by_name = {p["name"]: p for p in previous if "name" in p}
 
     records: list[dict[str, Any]] = []
     preserved: list[str] = []
     removed_orphans: list[str] = []
 
-    if src_dir.is_dir():
-        dst_dir.mkdir(parents=True, exist_ok=True)
-        for src in sorted(src_dir.glob("*.md")):
-            dst = dst_dir / src.name
-            new_text = src.read_text(encoding="utf-8")
-            new_hash = Manifest._sha256(new_text)
-            rel = f"{CLAUDE_COMMANDS_DIR_REL}/{src.name}"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    for src in sorted(src_dir.glob("*.md")):
+        dst = dst_dir / src.name
+        new_text = src.read_text(encoding="utf-8")
+        new_hash = Manifest._sha256(new_text)
+        rel = f"{CLAUDE_COMMANDS_DIR_REL}/{src.name}"
 
-            prev = prev_by_name.get(src.stem)
-            if dst.exists() and prev and prev.get("sha256"):
-                current_hash = Manifest._sha256(dst.read_text(encoding="utf-8"))
-                if current_hash != prev["sha256"] and current_hash != new_hash:
-                    # User edited the file since install — preserve their edits.
-                    records.append({"name": src.stem, "path": rel, "sha256": current_hash})
-                    preserved.append(src.stem)
-                    continue
+        prev = prev_by_name.get(src.stem)
+        if dst.exists() and prev and prev.get("sha256"):
+            current_hash = _safe_file_hash(dst)
+            if current_hash and current_hash != prev["sha256"] and current_hash != new_hash:
+                # User edited the file since install — preserve their edits.
+                records.append({"name": src.stem, "path": rel, "sha256": current_hash})
+                preserved.append(src.stem)
+                continue
+            # current_hash is None → file is unreadable. Fall through and
+            # overwrite from the template; better than aborting the install.
 
-            shutil.copy2(src, dst)
-            records.append({"name": src.stem, "path": rel, "sha256": new_hash})
+        shutil.copy2(src, dst)
+        records.append({"name": src.stem, "path": rel, "sha256": new_hash})
 
     # Reconcile orphans: any previously-tracked command that this version no
     # longer ships should be removed, unless the user customized it (in which
@@ -736,8 +745,10 @@ def _install_claude_commands(
             continue
         prev_hash = prev.get("sha256")
         if prev_hash:
-            current_hash = Manifest._sha256(old_path.read_text(encoding="utf-8"))
-            if current_hash != prev_hash:
+            current_hash = _safe_file_hash(old_path)
+            if current_hash is None or current_hash != prev_hash:
+                # Either the file diverged from the recorded hash, or we can't
+                # read it to be sure. Either way, don't risk deleting it.
                 preserved.append(name)
                 continue
         old_path.unlink()
@@ -754,6 +765,14 @@ def _install_claude_commands(
             parent = parent.parent
 
     return records, preserved, removed_orphans
+
+
+def _safe_file_hash(path: Path) -> str | None:
+    """Hash a file's UTF-8 contents, returning None if it's unreadable."""
+    try:
+        return Manifest._sha256(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> list[str]:
@@ -775,11 +794,10 @@ def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> lis
 
     recorded_hash = cmd_record.get("sha256")
     if recorded_hash:
-        try:
-            current_hash = Manifest._sha256(cmd_path.read_text(encoding="utf-8"))
-        except OSError:
-            current_hash = None
-        if current_hash and current_hash != recorded_hash:
+        current_hash = _safe_file_hash(cmd_path)
+        if current_hash is None or current_hash != recorded_hash:
+            # File diverged from manifest, or we couldn't read it to confirm.
+            # Don't risk deleting a customized file — leave it for the user.
             actions.append(
                 f"Preserved customized slash command /{cmd_record.get('name', cmd_path.stem)} "
                 f"({rel} — local edits detected, file kept)"

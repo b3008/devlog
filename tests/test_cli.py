@@ -215,7 +215,7 @@ class TestSlashCommands:
     def test_manifest_records_command_hashes(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude"])
         data = json.loads(
-            (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text()
+            (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text(encoding="utf-8")
         )
         for cmd in data["commands"]:
             assert "sha256" in cmd
@@ -248,8 +248,10 @@ class TestSlashCommands:
         orphan.write_text("ghost from a prior release\n", encoding="utf-8")
         import hashlib
 
-        orphan_hash = hashlib.sha256(orphan.read_text().encode()).hexdigest()
-        data = json.loads(manifest_path.read_text())
+        orphan_hash = hashlib.sha256(
+            orphan.read_text(encoding="utf-8").encode("utf-8")
+        ).hexdigest()
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
         data["commands"].append({
             "name": "devlog-zombie",
             "path": ".claude/commands/devlog-zombie.md",
@@ -261,8 +263,45 @@ class TestSlashCommands:
         assert result.exit_code == 0
         assert not orphan.exists()
         # And the manifest stops tracking it.
-        new_data = json.loads(manifest_path.read_text())
+        new_data = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert "devlog-zombie" not in {c["name"] for c in new_data["commands"]}
+
+    def test_install_passthrough_when_templates_missing(self, initialized_project: Path, monkeypatch):
+        """If templates/commands/ is missing (packaging error / incomplete checkout),
+        reinstall must NOT delete previously-tracked commands as orphans."""
+        from devlog_cli import _install_claude_commands
+
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        assert cmd_file.exists()
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        previous = json.loads(manifest_path.read_text(encoding="utf-8"))["commands"]
+
+        # Point _templates_dir() at a directory without commands/ to simulate the failure.
+        from devlog_cli import _templates_dir as real_templates_dir
+        broken_root = initialized_project / "broken_templates"
+        broken_root.mkdir()
+        monkeypatch.setattr("devlog_cli._templates_dir", lambda: broken_root)
+
+        records, preserved, orphans = _install_claude_commands(initialized_project, previous)
+        assert records == previous  # passthrough preserves the prior manifest exactly
+        assert preserved == []
+        assert orphans == []
+        assert cmd_file.exists()  # critically, no files deleted
+
+    def test_reinstall_overwrites_unreadable_file(self, initialized_project: Path):
+        """If dst exists but is unreadable, install must not abort — it should
+        fall back to overwriting from the template."""
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        # Write invalid UTF-8 to trigger UnicodeDecodeError on read.
+        cmd_file.write_bytes(b"\xff\xfe not valid utf-8 \x80")
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        # File got overwritten from the template — content should now be valid UTF-8
+        # matching the bundled template (starts with frontmatter).
+        body = cmd_file.read_text(encoding="utf-8")
+        assert body.startswith("---")
 
     def test_reinstall_preserves_modified_orphan(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude"])
@@ -271,8 +310,8 @@ class TestSlashCommands:
         orphan.write_text("original ghost\n", encoding="utf-8")
         import hashlib
 
-        original_hash = hashlib.sha256("original ghost\n".encode()).hexdigest()
-        data = json.loads(manifest_path.read_text())
+        original_hash = hashlib.sha256("original ghost\n".encode("utf-8")).hexdigest()
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
         data["commands"].append({
             "name": "devlog-zombie",
             "path": ".claude/commands/devlog-zombie.md",
@@ -285,7 +324,7 @@ class TestSlashCommands:
         result = runner.invoke(app, ["install", "--ai", "claude"])
         assert result.exit_code == 0
         assert orphan.exists()
-        assert orphan.read_text() == "user-edited ghost\n"
+        assert orphan.read_text(encoding="utf-8") == "user-edited ghost\n"
 
 
 class TestUninstall:

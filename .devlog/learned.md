@@ -31,6 +31,7 @@ a blog entry and append to it when new durable context emerges.
 - **Case-study-driven design.** Feature additions on this project tend to come from observing the convention fail on a real project, rather than from up-front speculation. That framing belongs in blog entries when it applies.
 - **Self-referential dogfooding.** devlog is installed on itself, so its own blog is both a test bed and a live example. Entries here should read as genuine project reflections, not demos.
 - **Dogfooding the warm path.** Self-installing devlog on this repo doesn't exercise cold-start failure modes — this repo always has scaffolding present. New surfaces (slash commands, hooks) need explicit cold-repo verification or external review (e.g. PR #9's Copilot review caught the missing-scaffolding gap that local dogfooding could not).
+- **Defensive code introduces new failure surfaces.** Each "make this safer" pass on the install pipeline (PR #10 preflight, PR #11 hashing/reconciliation) introduced its own bugs that the next Copilot round caught. The pattern: new I/O without `try/except`, new schema fields without explicit encoding, new walks that assume the package is intact. Treat every defensive addition as a new failure site that itself needs testing.
 
 ## Landscape / competitors
 
