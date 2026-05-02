@@ -27,6 +27,9 @@ class Manifest:
         # Each entry: {"event": "Stop", "settings_path": ".claude/settings.json",
         #              "script_path": ".devlog/hooks/stop.py", "command": "python3 ..."}
         self.hooks: list[dict[str, Any]] = []
+        # Slash commands installed into agent command directories.
+        # Each entry: {"name": "devlog-catchup", "path": ".claude/commands/devlog-catchup.md"}
+        self.commands: list[dict[str, Any]] = []
 
     @property
     def manifest_path(self) -> Path:
@@ -40,6 +43,7 @@ class Manifest:
             "installed_at": self.installed_at,
             "files": self.files,
             "hooks": self.hooks,
+            "commands": self.commands,
         }
         path = self.manifest_path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,6 +68,7 @@ class Manifest:
         m.installed_at = data.get("installed_at", "")
         m.files = data.get("files", {})
         m.hooks = data.get("hooks", [])
+        m.commands = data.get("commands", [])
         return m
 
     @staticmethod

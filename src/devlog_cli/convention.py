@@ -23,19 +23,21 @@ _SENTINEL_END_MARKER = "<!-- DEVLOG:END"
 DEFAULT_CONFIG: dict[str, Any] = {
     "blog_dir": "blog",
     "media_dir": "blog/media",
-    "file_pattern": "YYYY-MM-DD-slug.md",
+    "file_pattern": "YYYY-MM-DD-NN-slug.md",
     "index_file": "_index.md",
     "sections": [
         {"name": "What changed", "description": "concrete description of what was built/fixed"},
         {"name": "Why it matters", "description": "significance for the project, users, or architecture"},
         {"name": "How it works", "description": "brief technical explanation (portfolio audience: technical but not necessarily familiar with the codebase)"},
         {"name": "What's next", "description": "open threads or future directions"},
+        {"name": "Surprises", "description": "anything unexpected — a search that led to an insight, an approach that failed, a misconception corrected (skip if the session was routine)"},
     ],
     "voice": [
         "Portfolio-oriented: write for someone evaluating the work (potential collaborators, employers, researchers, or AI agents picking up the project later)",
         "Narrative, not changelog: explain the *why* and *so what*, not just the *what*",
         "Concrete over abstract: reference specific files, show output examples, describe real problems solved",
         "Honest about tradeoffs: mention what didn't work, what was scrappy, what's still rough",
+        "First-hand, not reconstructed: narrate from what you observed during the session — the reasoning, the alternatives, the surprises — not from commit messages or diffs after the fact",
     ],
     "triggers": [
         "New feature or command implemented",
@@ -53,12 +55,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "testing",
         "documentation",
         "infrastructure",
+        "research",
         "ux",
         "demo",
     ],
     "frontmatter": [
         {"field": "title", "example": '"Short descriptive title"'},
         {"field": "date", "example": "YYYY-MM-DD"},
+        {"field": "timestamp", "example": "YYYY-MM-DDTHH:MM:SS  # ISO 8601 local time, captured when the entry is written"},
         {"field": "tags", "example": "[relevant, tags, from-list-below]"},
         {"field": "summary", "example": '"One-sentence summary of what was accomplished and why it matters."'},
     ],
@@ -66,8 +70,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": True,
         "instructions": [
             "Take screenshots of CLI output, generated files, or workflow artifacts",
-            "Save media to `{media_dir}/YYYY-MM-DD-slug/` (matching the entry filename)",
-            "Reference in markdown as `![Alt text](media/YYYY-MM-DD-slug/filename.png)`",
+            "Save media to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename)",
+            "Reference in markdown as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`",
             "If screenshots aren't feasible, add a `<!-- TODO: screenshot -->` placeholder",
         ],
     },
@@ -230,8 +234,8 @@ When durable project knowledge emerges during the session \u2014 a new domain te
 
 ### How to write an entry
 
-1. Create a file: `{blog_dir}/YYYY-MM-DD-slug.md`
-2. If multiple entries share a date, append a number: `YYYY-MM-DD-slug-2.md`
+1. Create a file: `{blog_dir}/YYYY-MM-DD-NN-slug.md` — `NN` is a zero-padded per-day index (`01`, `02`, ...). Scan `{blog_dir}/` for existing files matching the date and pick the next available number; start at `01` if none exist. The index keeps entries in deterministic chronological order under lexical sort.
+2. Set `date` to today and `timestamp` to the current local time in ISO 8601 (`YYYY-MM-DDTHH:MM:SS`) at the moment you write the entry. The timestamp captures when within the day the work happened — precise ordering for entries that share a date.
 3. Use this frontmatter template:
 
 {fm_block}

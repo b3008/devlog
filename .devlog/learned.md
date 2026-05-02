@@ -20,9 +20,10 @@ a blog entry and append to it when new durable context emerges.
 
 - `.devlog/config.yaml` — user-owned stable configuration (triggers, voice, tags, frontmatter, media).
 - `.devlog/learned.md` — this file. Agent-owned adaptive surface.
-- `.devlog/manifests/<agent>.manifest.json` — SHA-256 tracking per agent install.
+- `.devlog/manifests/<agent>.manifest.json` — SHA-256 tracking per agent install. Includes `hooks` and `commands` arrays.
 - `convention.py` — renderer plus `discover_tags()` and `scan_entries()` helpers.
 - `manifest.py` — install manifest model. Kept intentionally small.
+- `templates/commands/*.md` — slash command bodies, copied into `.claude/commands/` on Claude installs. Drop-in: any new `.md` here gets installed automatically.
 
 ## Recurring themes
 
@@ -30,8 +31,17 @@ a blog entry and append to it when new durable context emerges.
 - **Case-study-driven design.** Feature additions on this project tend to come from observing the convention fail on a real project, rather than from up-front speculation. That framing belongs in blog entries when it applies.
 - **Self-referential dogfooding.** devlog is installed on itself, so its own blog is both a test bed and a live example. Entries here should read as genuine project reflections, not demos.
 
+## Landscape / competitors
+
+- **Commit-driven journals** (DevDiary, DevLog-by-zeshama, AI Commit) — reconstruct narrative post-hoc from git metadata. Lossy by design; quality capped by commit message quality.
+- **Changelog generators** (conventional-changelog, git-cliff, semantic-release) — structured release notes, not narrative. Different audience (upgraders vs. evaluators).
+- **Manual markdown diaries** — validate demand but fail on sustainability (human discipline as write trigger).
+- **Agent-context standards** (AGENTS.md, CLAUDE.md) — devlog's substrate, not competitors. AGENTS.md convergence trend worth tracking.
+- **GitHub Agentic Workflows (gh-aw)** — platform-triggered agent tasks; plausible alternative trigger model for devlog entries.
+
 ## Open threads
 
 - Does the agent actually read and extend `learned.md` over time, or does it get written once and ignored? Needs real usage data.
 - A future `devlog doctor` or extended `status` could surface `learned.md` freshness, but it's premature without evidence that the file drifts.
 - Claude Code `Stop` hooks as an enforcement mechanism for the "write-in-same-turn" rule remain the obvious next enhancement if the reworded convention proves insufficient.
+- Six pre-2026-05-02 entries still use the old `YYYY-MM-DD-slug.md` format and lack the `timestamp` frontmatter field. Backfill vs. leave-as-legacy is an open call.

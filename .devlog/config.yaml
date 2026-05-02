@@ -3,7 +3,7 @@
 
 blog_dir: blog
 media_dir: blog/media
-file_pattern: "YYYY-MM-DD-slug.md"
+file_pattern: "YYYY-MM-DD-NN-slug.md"
 index_file: "_index.md"
 
 # Sections to include in each blog entry
@@ -16,6 +16,8 @@ sections:
     description: "brief technical explanation (portfolio audience: technical but not necessarily familiar with the codebase)"
   - name: "What's next"
     description: "open threads or future directions"
+  - name: "Surprises"
+    description: "anything unexpected — a search that led to an insight, an approach that failed, a misconception corrected (skip if the session was routine)"
 
 # Voice and audience guidelines
 voice:
@@ -23,6 +25,7 @@ voice:
   - "Narrative, not changelog: explain the *why* and *so what*, not just the *what*"
   - "Concrete over abstract: reference specific files, show output examples, describe real problems solved"
   - "Honest about tradeoffs: mention what didn't work, what was scrappy, what's still rough"
+  - "First-hand, not reconstructed: narrate from what you observed during the session — the reasoning, the alternatives, the surprises — not from commit messages or diffs after the fact"
 
 # When should the agent write a blog entry
 triggers:
@@ -42,6 +45,7 @@ tags:
   - testing
   - documentation
   - infrastructure
+  - research
   - ux
   - demo
 
@@ -51,6 +55,8 @@ frontmatter:
     example: '"Short descriptive title"'
   - field: date
     example: YYYY-MM-DD
+  - field: timestamp
+    example: "YYYY-MM-DDTHH:MM:SS  # ISO 8601 local time, captured when the entry is written"
   - field: tags
     example: "[relevant, tags, from-list-below]"
   - field: summary
@@ -61,6 +67,6 @@ media:
   enabled: true
   instructions:
     - "Take screenshots of CLI output, generated files, or workflow artifacts"
-    - "Save media to `{media_dir}/YYYY-MM-DD-slug/` (matching the entry filename)"
-    - "Reference in markdown as `![Alt text](media/YYYY-MM-DD-slug/filename.png)`"
+    - "Save media to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename)"
+    - "Reference in markdown as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`"
     - "If screenshots aren't feasible, add a `<!-- TODO: screenshot -->` placeholder"
