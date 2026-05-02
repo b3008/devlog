@@ -30,6 +30,7 @@ grows automatically, in the agent's own voice.
 - [Quickstart](#quickstart)
 - [What actually happens](#what-actually-happens)
 - [Commands](#commands)
+- [Slash commands (Claude Code)](#slash-commands-claude-code)
 - [Adaptive convention](#adaptive-convention)
 - [Supported agents](#supported-agents)
 - [How it works](#how-it-works)
@@ -124,6 +125,25 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 | `devlog list` | List all supported agents. |
 | `devlog status` | Show which agents currently have the convention active. |
 | `devlog version` | Print version. |
+
+<br>
+
+## Slash commands (Claude Code)
+
+Installing for Claude Code also drops three slash commands into
+`.claude/commands/` (or `~/.claude/commands/` for `--global` installs).
+They give you direct, on-demand control over the blog from inside any
+Claude Code session — no flag needed, they ship by default.
+
+| Command | What it does |
+| --- | --- |
+| `/devlog-catchup` | Reads `blog/_index.md`, the 5 most recent entries, and `.devlog/learned.md`, then returns a structured project briefing — project arc, recent work, open threads, glossary highlights. Use at the start of a session to load context. |
+| `/devlog-write <topic>` | Writes a new entry about the given topic. Computes the next per-day index `NN` and ISO timestamp, derives a kebab-case slug, follows your project's convention (sections, voice, tags from `.devlog/config.yaml`), and updates `blog/_index.md`. Refuses vague input rather than fabricating. |
+| `/devlog-manicure [topic]` | Four-phase audit of past entries: categorizes findings (followed-through, revised, discarded, drifted, etc.), writes a recap entry, then proposes wipes or dated blockquote annotations (`> **Update YYYY-MM-DD**: …`) for you to approve before applying. Optional topic argument scopes the manicure to a single thread. |
+
+The three commands form a working loop: **catchup** loads the blog into
+context, **write** adds new entries, **manicure** audits and prunes
+what's already there. Uninstall removes them automatically.
 
 <br>
 
@@ -235,9 +255,14 @@ your-project/
 │   ├── learned.md               # agent-maintained project notebook
 │   └── manifests/
 │       └── claude.manifest.json # install tracking
+├── .claude/
+│   └── commands/                # slash commands (claude installs only)
+│       ├── devlog-catchup.md
+│       ├── devlog-write.md
+│       └── devlog-manicure.md
 ├── blog/
 │   ├── _index.md
-│   ├── 2026-04-16-first-entry.md
+│   ├── 2026-04-16-01-first-entry.md
 │   └── media/
 └── CLAUDE.md                    # convention injected between sentinels
 ```
