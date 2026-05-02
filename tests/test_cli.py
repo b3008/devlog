@@ -278,7 +278,6 @@ class TestSlashCommands:
         previous = json.loads(manifest_path.read_text(encoding="utf-8"))["commands"]
 
         # Point _templates_dir() at a directory without commands/ to simulate the failure.
-        from devlog_cli import _templates_dir as real_templates_dir
         broken_root = initialized_project / "broken_templates"
         broken_root.mkdir()
         monkeypatch.setattr("devlog_cli._templates_dir", lambda: broken_root)
