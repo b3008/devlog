@@ -135,6 +135,84 @@ class TestInstallWithHook:
         assert "--with-hook" in result.output
 
 
+class TestSlashCommands:
+    def test_command_file_created(self, initialized_project: Path):
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        assert cmd_file.exists()
+        body = cmd_file.read_text(encoding="utf-8")
+        assert "blog/_index.md" in body
+        assert "learned.md" in body
+
+    def test_write_command_file_created(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-write.md"
+        assert cmd_file.exists()
+        body = cmd_file.read_text(encoding="utf-8")
+        assert "$ARGUMENTS" in body
+
+    def test_manicure_command_file_created(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-manicure.md"
+        assert cmd_file.exists()
+        body = cmd_file.read_text(encoding="utf-8")
+        # Phase markers and key concepts present.
+        assert "Phase 1" in body
+        assert "Phase 4" in body
+        assert "annotate" in body
+        assert "wipe" in body
+        # Optional topic argument is wired in.
+        assert "$ARGUMENTS" in body
+
+    def test_manifest_records_command(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        data = json.loads(
+            (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text()
+        )
+        names = {c["name"] for c in data["commands"]}
+        assert "devlog-catchup" in names
+        assert "devlog-write" in names
+        assert "devlog-manicure" in names
+
+    def test_install_message_lists_command(self, initialized_project: Path):
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert "/devlog-catchup" in result.output
+        assert "/devlog-write" in result.output
+        assert "/devlog-manicure" in result.output
+
+    def test_idempotent_on_reinstall(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_files = list((initialized_project / ".claude" / "commands").glob("*.md"))
+        assert len(cmd_files) == 3  # catchup + write + manicure
+
+    def test_not_installed_for_non_claude(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "copilot"])
+        assert not (initialized_project / ".claude" / "commands").exists()
+
+    def test_uninstall_removes_command(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        assert cmd_file.exists()
+        runner.invoke(app, ["uninstall", "--ai", "claude"])
+        assert not cmd_file.exists()
+        # Empty .claude/commands and .claude get cleaned up.
+        assert not (initialized_project / ".claude" / "commands").exists()
+
+    def test_global_install_creates_command(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        cmd_file = project_dir / ".claude" / "commands" / "devlog-catchup.md"
+        assert cmd_file.exists()
+
+    def test_global_uninstall_removes_command(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
+        assert not (project_dir / ".claude" / "commands" / "devlog-catchup.md").exists()
+
+
 class TestUninstall:
     def test_removes_convention(self, installed_project: Path):
         result = runner.invoke(app, ["uninstall", "--ai", "claude"])

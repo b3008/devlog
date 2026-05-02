@@ -3,7 +3,7 @@
 
 blog_dir: blog
 media_dir: blog/media
-file_pattern: "YYYY-MM-DD-slug.md"
+file_pattern: "YYYY-MM-DD-NN-slug.md"
 index_file: "_index.md"
 
 # Sections to include in each blog entry
@@ -55,6 +55,8 @@ frontmatter:
     example: '"Short descriptive title"'
   - field: date
     example: YYYY-MM-DD
+  - field: timestamp
+    example: "YYYY-MM-DDTHH:MM:SS  # ISO 8601 local time, captured when the entry is written"
   - field: tags
     example: "[relevant, tags, from-list-below]"
   - field: summary
@@ -65,6 +67,6 @@ media:
   enabled: true
   instructions:
     - "Take screenshots of CLI output, generated files, or workflow artifacts"
-    - "Save media to `{media_dir}/YYYY-MM-DD-slug/` (matching the entry filename)"
-    - "Reference in markdown as `![Alt text](media/YYYY-MM-DD-slug/filename.png)`"
+    - "Save media to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename)"
+    - "Reference in markdown as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`"
     - "If screenshots aren't feasible, add a `<!-- TODO: screenshot -->` placeholder"

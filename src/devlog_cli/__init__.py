@@ -212,6 +212,16 @@ def _install_local(agent: AgentConfig, *, with_hook: bool) -> None:
     manifest.files[agent.context_file] = Manifest._sha256(new_content)
     tree.add(f"[green]Injected convention into {agent.context_file}[/green]")
 
+    # Install Claude Code slash commands (default-on for claude installs).
+    if agent.key == "claude":
+        for cmd_record in _install_claude_commands(project_root):
+            manifest.commands.append(cmd_record)
+            tree.add(
+                f"[green]Installed slash command[/green] "
+                f"[cyan]/{cmd_record['name']}[/cyan] "
+                f"([dim]{cmd_record['path']}[/dim])"
+            )
+
     # Optionally install the Claude Code Stop hook
     if with_hook:
         hook_record = _install_claude_stop_hook(project_root)
@@ -266,6 +276,16 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
     ctx_path.write_text(new_content, encoding="utf-8")
     manifest.files[agent.context_file] = Manifest._sha256(new_content)
     tree.add(f"[green]Injected convention into ~/{agent.context_file}[/green]")
+
+    # Install Claude Code slash commands globally (default-on for claude installs).
+    if agent.key == "claude":
+        for cmd_record in _install_claude_commands(home):
+            manifest.commands.append(cmd_record)
+            tree.add(
+                f"[green]Installed global slash command[/green] "
+                f"[cyan]/{cmd_record['name']}[/cyan] "
+                f"([dim]~/{cmd_record['path']}[/dim])"
+            )
 
     # Optionally install the global Stop hook
     if with_hook:
@@ -352,6 +372,12 @@ def uninstall(
             if hook.get("event") == "Stop" and ai == "claude":
                 for action in _uninstall_claude_stop_hook(root_dir, hook):
                     console.print(f"[green]{action}[/green]")
+
+    # Remove any installed slash commands recorded in the manifest
+    if manifest is not None:
+        for cmd in manifest.commands:
+            for action in _uninstall_claude_command(root_dir, cmd):
+                console.print(f"[green]{action}[/green]")
 
     # Clean up manifest
     if manifest_path.exists():
@@ -613,6 +639,62 @@ def _uninstall_claude_stop_hook(project_root: Path, hook_record: dict[str, Any])
                 break
             parent = parent.parent
         actions.append(f"Removed {hook_record['script_path']}")
+
+    return actions
+
+
+# ── Claude Code slash command helpers ────────────────────────────────────
+
+CLAUDE_COMMANDS_DIR_REL = ".claude/commands"
+
+
+def _install_claude_commands(root_dir: Path) -> list[dict[str, Any]]:
+    """Copy bundled slash command templates into .claude/commands/.
+
+    root_dir is the project root (per-project) or Path.home() (global).
+    Returns a list of command records suitable for storage in the manifest.
+    """
+    src_dir = _templates_dir() / "commands"
+    if not src_dir.is_dir():
+        return []
+
+    dst_dir = root_dir / CLAUDE_COMMANDS_DIR_REL
+    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    records: list[dict[str, Any]] = []
+    for src in sorted(src_dir.glob("*.md")):
+        dst = dst_dir / src.name
+        shutil.copy2(src, dst)
+        records.append({
+            "name": src.stem,
+            "path": f"{CLAUDE_COMMANDS_DIR_REL}/{src.name}",
+        })
+    return records
+
+
+def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> list[str]:
+    """Remove a previously-installed slash command. Returns a list of human-readable
+    actions taken (for display)."""
+    actions: list[str] = []
+
+    rel = cmd_record.get("path")
+    if not rel:
+        return actions
+
+    cmd_path = root_dir / rel
+    if cmd_path.exists():
+        cmd_path.unlink()
+        # Drop empty parent dirs (commands/, then .claude/ only if empty).
+        parent = cmd_path.parent
+        while parent != root_dir and parent.exists():
+            try:
+                if any(parent.iterdir()):
+                    break
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+        actions.append(f"Removed slash command /{cmd_record.get('name', cmd_path.stem)}")
 
     return actions
 

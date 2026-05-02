@@ -20,9 +20,10 @@ a blog entry and append to it when new durable context emerges.
 
 - `.devlog/config.yaml` — user-owned stable configuration (triggers, voice, tags, frontmatter, media).
 - `.devlog/learned.md` — this file. Agent-owned adaptive surface.
-- `.devlog/manifests/<agent>.manifest.json` — SHA-256 tracking per agent install.
+- `.devlog/manifests/<agent>.manifest.json` — SHA-256 tracking per agent install. Includes `hooks` and `commands` arrays.
 - `convention.py` — renderer plus `discover_tags()` and `scan_entries()` helpers.
 - `manifest.py` — install manifest model. Kept intentionally small.
+- `templates/commands/*.md` — slash command bodies, copied into `.claude/commands/` on Claude installs. Drop-in: any new `.md` here gets installed automatically.
 
 ## Recurring themes
 
@@ -43,3 +44,4 @@ a blog entry and append to it when new durable context emerges.
 - Does the agent actually read and extend `learned.md` over time, or does it get written once and ignored? Needs real usage data.
 - A future `devlog doctor` or extended `status` could surface `learned.md` freshness, but it's premature without evidence that the file drifts.
 - Claude Code `Stop` hooks as an enforcement mechanism for the "write-in-same-turn" rule remain the obvious next enhancement if the reworded convention proves insufficient.
+- Six pre-2026-05-02 entries still use the old `YYYY-MM-DD-slug.md` format and lack the `timestamp` frontmatter field. Backfill vs. leave-as-legacy is an open call.

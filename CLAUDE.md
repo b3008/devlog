@@ -23,14 +23,15 @@ When durable project knowledge emerges during the session — a new domain term 
 
 ### How to write an entry
 
-1. Create a file: `blog/YYYY-MM-DD-slug.md`
-2. If multiple entries share a date, append a number: `YYYY-MM-DD-slug-2.md`
+1. Create a file: `blog/YYYY-MM-DD-NN-slug.md` — `NN` is a zero-padded per-day index (`01`, `02`, ...). Scan `blog/` for existing files matching the date and pick the next available number; start at `01` if none exist. The index keeps entries in deterministic chronological order under lexical sort.
+2. Set `date` to today and `timestamp` to the current local time in ISO 8601 (`YYYY-MM-DDTHH:MM:SS`) at the moment you write the entry. The timestamp captures when within the day the work happened — precise ordering for entries that share a date.
 3. Use this frontmatter template:
 
 ```yaml
 ---
 title: "Short descriptive title"
 date: YYYY-MM-DD
+timestamp: YYYY-MM-DDTHH:MM:SS  # ISO 8601 local time, captured when the entry is written
 tags: [relevant, tags, from-list-below]
 summary: "One-sentence summary of what was accomplished and why it matters."
 ---
@@ -45,8 +46,8 @@ summary: "One-sentence summary of what was accomplished and why it matters."
 
 5. **Capture rich media** — screenshots and visuals are critical for portfolio impact:
    - Take screenshots of CLI output, generated files, or workflow artifacts
-   - Save media to `blog/media/YYYY-MM-DD-slug/` (matching the entry filename)
-   - Reference in markdown as `![Alt text](media/YYYY-MM-DD-slug/filename.png)`
+   - Save media to `blog/media/YYYY-MM-DD-NN-slug/` (matching the entry filename)
+   - Reference in markdown as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`
    - If screenshots aren't feasible, add a `<!-- TODO: screenshot -->` placeholder
 
 6. Update `blog/_index.md` — add the new entry to the list at the top.
