@@ -194,6 +194,7 @@ def _install_local(agent: AgentConfig, *, with_hook: bool) -> None:
 
     convention_text = generate_convention(config)
     manifest = Manifest(agent_key=agent.key, project_root=project_root, version=__version__)
+    previous_manifest = Manifest.load(manifest_path, project_root) if manifest_path.exists() else None
 
     tree = Tree(f"[bold green]Installing devlog convention[/bold green] — {agent.name}")
     if new_tags:
@@ -214,13 +215,24 @@ def _install_local(agent: AgentConfig, *, with_hook: bool) -> None:
 
     # Install Claude Code slash commands (default-on for claude installs).
     if agent.key == "claude":
-        for cmd_record in _install_claude_commands(project_root):
+        prev_commands = previous_manifest.commands if previous_manifest else []
+        records, preserved, orphans = _install_claude_commands(project_root, prev_commands)
+        for cmd_record in records:
             manifest.commands.append(cmd_record)
-            tree.add(
-                f"[green]Installed slash command[/green] "
-                f"[cyan]/{cmd_record['name']}[/cyan] "
-                f"([dim]{cmd_record['path']}[/dim])"
-            )
+            if cmd_record["name"] in preserved:
+                tree.add(
+                    f"[yellow]Preserved customized slash command[/yellow] "
+                    f"[cyan]/{cmd_record['name']}[/cyan] "
+                    f"([dim]{cmd_record['path']} \u2014 local edits kept[/dim])"
+                )
+            else:
+                tree.add(
+                    f"[green]Installed slash command[/green] "
+                    f"[cyan]/{cmd_record['name']}[/cyan] "
+                    f"([dim]{cmd_record['path']}[/dim])"
+                )
+        for rel in orphans:
+            tree.add(f"[yellow]Removed orphaned slash command[/yellow] [dim]{rel}[/dim]")
 
     # Optionally install the Claude Code Stop hook
     if with_hook:
@@ -257,9 +269,12 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
     convention_text = generate_convention(config, global_mode=True)
 
     manifest = Manifest(agent_key=agent.key, project_root=home, version=__version__)
+    previous_manifest = (
+        Manifest.load(manifest.manifest_path, home) if manifest.manifest_path.exists() else None
+    )
 
     # Check for existing global manifest
-    if manifest.manifest_path.exists():
+    if previous_manifest is not None:
         console.print(f"[yellow]{agent.name} global convention already installed. Reinstalling...[/yellow]")
 
     tree = Tree(f"[bold green]Installing devlog convention (global)[/bold green] — {agent.name}")
@@ -279,13 +294,24 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
 
     # Install Claude Code slash commands globally (default-on for claude installs).
     if agent.key == "claude":
-        for cmd_record in _install_claude_commands(home):
+        prev_commands = previous_manifest.commands if previous_manifest else []
+        records, preserved, orphans = _install_claude_commands(home, prev_commands)
+        for cmd_record in records:
             manifest.commands.append(cmd_record)
-            tree.add(
-                f"[green]Installed global slash command[/green] "
-                f"[cyan]/{cmd_record['name']}[/cyan] "
-                f"([dim]~/{cmd_record['path']}[/dim])"
-            )
+            if cmd_record["name"] in preserved:
+                tree.add(
+                    f"[yellow]Preserved customized global slash command[/yellow] "
+                    f"[cyan]/{cmd_record['name']}[/cyan] "
+                    f"([dim]~/{cmd_record['path']} — local edits kept[/dim])"
+                )
+            else:
+                tree.add(
+                    f"[green]Installed global slash command[/green] "
+                    f"[cyan]/{cmd_record['name']}[/cyan] "
+                    f"([dim]~/{cmd_record['path']}[/dim])"
+                )
+        for rel in orphans:
+            tree.add(f"[yellow]Removed orphaned global slash command[/yellow] [dim]~/{rel}[/dim]")
 
     # Optionally install the global Stop hook
     if with_hook:
@@ -648,44 +674,87 @@ def _uninstall_claude_stop_hook(project_root: Path, hook_record: dict[str, Any])
 CLAUDE_COMMANDS_DIR_REL = ".claude/commands"
 
 
-def _install_claude_commands(root_dir: Path) -> list[dict[str, Any]]:
+def _install_claude_commands(
+    root_dir: Path,
+    previous: list[dict[str, Any]] | None = None,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     """Copy bundled slash command templates into .claude/commands/.
 
     root_dir is the project root (per-project) or Path.home() (global).
-    Returns a list of command records suitable for storage in the manifest.
+    `previous` is the prior manifest's commands list (used to reconcile orphans
+    from removed/renamed templates and to detect user customizations).
+
+    Returns ``(records, preserved, removed_orphans)``:
+        records          — command records to store in the new manifest.
+        preserved        — names of commands that were left untouched because
+                           the user customized them since install (warn the
+                           caller; do not overwrite).
+        removed_orphans  — paths of files removed because the corresponding
+                           template no longer exists in this version.
     """
     src_dir = _templates_dir() / "commands"
-    if not src_dir.is_dir():
-        return []
-
     dst_dir = root_dir / CLAUDE_COMMANDS_DIR_REL
-    dst_dir.mkdir(parents=True, exist_ok=True)
+
+    previous = previous or []
+
+    # If templates aren't shipped with this build (packaging error, incomplete
+    # checkout), pass the previous records through untouched. Reconciliation
+    # would otherwise treat every tracked command as an orphan and delete user
+    # files on what is really a broken install — a net-destructive failure mode.
+    if not src_dir.is_dir():
+        return list(previous), [], []
+
+    prev_by_name = {p["name"]: p for p in previous if "name" in p}
 
     records: list[dict[str, Any]] = []
+    preserved: list[str] = []
+    removed_orphans: list[str] = []
+
+    dst_dir.mkdir(parents=True, exist_ok=True)
     for src in sorted(src_dir.glob("*.md")):
         dst = dst_dir / src.name
+        new_text = src.read_text(encoding="utf-8")
+        new_hash = Manifest._sha256(new_text)
+        rel = f"{CLAUDE_COMMANDS_DIR_REL}/{src.name}"
+
+        prev = prev_by_name.get(src.stem)
+        if dst.exists() and prev and prev.get("sha256"):
+            current_hash = _safe_file_hash(dst)
+            if current_hash and current_hash != prev["sha256"] and current_hash != new_hash:
+                # User edited the file since install — preserve their edits.
+                records.append({"name": src.stem, "path": rel, "sha256": current_hash})
+                preserved.append(src.stem)
+                continue
+            # current_hash is None → file is unreadable. Fall through and
+            # overwrite from the template; better than aborting the install.
+
         shutil.copy2(src, dst)
-        records.append({
-            "name": src.stem,
-            "path": f"{CLAUDE_COMMANDS_DIR_REL}/{src.name}",
-        })
-    return records
+        records.append({"name": src.stem, "path": rel, "sha256": new_hash})
 
-
-def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> list[str]:
-    """Remove a previously-installed slash command. Returns a list of human-readable
-    actions taken (for display)."""
-    actions: list[str] = []
-
-    rel = cmd_record.get("path")
-    if not rel:
-        return actions
-
-    cmd_path = root_dir / rel
-    if cmd_path.exists():
-        cmd_path.unlink()
-        # Drop empty parent dirs (commands/, then .claude/ only if empty).
-        parent = cmd_path.parent
+    # Reconcile orphans: any previously-tracked command that this version no
+    # longer ships should be removed, unless the user customized it (in which
+    # case we leave the file alone but stop tracking it).
+    new_names = {r["name"] for r in records}
+    for prev in previous:
+        name = prev.get("name")
+        rel = prev.get("path")
+        if not name or not rel or name in new_names:
+            continue
+        old_path = root_dir / rel
+        if not old_path.exists():
+            continue
+        prev_hash = prev.get("sha256")
+        if prev_hash:
+            current_hash = _safe_file_hash(old_path)
+            if current_hash is None or current_hash != prev_hash:
+                # Either the file diverged from the recorded hash, or we can't
+                # read it to be sure. Either way, don't risk deleting it.
+                preserved.append(name)
+                continue
+        old_path.unlink()
+        removed_orphans.append(rel)
+        # Drop empty parent dirs.
+        parent = old_path.parent
         while parent != root_dir and parent.exists():
             try:
                 if any(parent.iterdir()):
@@ -694,7 +763,59 @@ def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> lis
             except OSError:
                 break
             parent = parent.parent
-        actions.append(f"Removed slash command /{cmd_record.get('name', cmd_path.stem)}")
+
+    return records, preserved, removed_orphans
+
+
+def _safe_file_hash(path: Path) -> str | None:
+    """Hash a file's UTF-8 contents, returning None if it's unreadable."""
+    try:
+        return Manifest._sha256(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> list[str]:
+    """Remove a previously-installed slash command. Returns a list of human-readable
+    actions taken (for display).
+
+    If the file's hash diverges from the manifest's recorded hash, the user has
+    customized it since install — leave it in place and report that.
+    """
+    actions: list[str] = []
+
+    rel = cmd_record.get("path")
+    if not rel:
+        return actions
+
+    cmd_path = root_dir / rel
+    if not cmd_path.exists():
+        return actions
+
+    recorded_hash = cmd_record.get("sha256")
+    if recorded_hash:
+        current_hash = _safe_file_hash(cmd_path)
+        if current_hash is None or current_hash != recorded_hash:
+            # File diverged from manifest, or we couldn't read it to confirm.
+            # Don't risk deleting a customized file — leave it for the user.
+            actions.append(
+                f"Preserved customized slash command /{cmd_record.get('name', cmd_path.stem)} "
+                f"({rel} — local edits detected, file kept)"
+            )
+            return actions
+
+    cmd_path.unlink()
+    # Drop empty parent dirs (commands/, then .claude/ only if empty).
+    parent = cmd_path.parent
+    while parent != root_dir and parent.exists():
+        try:
+            if any(parent.iterdir()):
+                break
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+    actions.append(f"Removed slash command /{cmd_record.get('name', cmd_path.stem)}")
 
     return actions
 

@@ -4,9 +4,18 @@ description: Audit past devlog entries for what carried through, was revised, or
 
 Manicure the devlog. This is a multi-phase command — work through each phase in order, and pause for user input where indicated. Do not edit existing entries until Phase 4, and only with explicit approval.
 
+## Resolve paths
+
+Before doing anything else, resolve the blog directory and index file from `.devlog/config.yaml` if it exists:
+
+- `<blog_dir>` is the `blog_dir` value (default: `blog`).
+- `<index_file>` is the `index_file` value (default: `_index.md`).
+
+Use these resolved paths for every reference below.
+
 ## Preflight
 
-If `blog/` does not exist, or it has fewer than two entries, there is nothing meaningful to manicure (a manicure pass needs a small history to audit). Report that briefly and stop. Suggest the user run `/devlog-write <topic>` to start producing entries, and try again once a few have accumulated. Do not scaffold anything.
+If `<blog_dir>/` does not exist, or it has fewer than two entries (excluding `<index_file>`), there is nothing meaningful to manicure (a manicure pass needs a small history to audit). Report that briefly and stop. Suggest the user run `/devlog-write <topic>` to start producing entries, and try again once a few have accumulated. Do not scaffold anything.
 
 Otherwise, proceed.
 
@@ -23,7 +32,7 @@ In topic-scoped mode, every phase below narrows accordingly: the audit only cate
 
 Read, in chronological order (oldest first):
 
-1. Every entry in `blog/` (skip `_index.md`).
+1. Every entry in `<blog_dir>/` (skip `<index_file>`).
 2. `.devlog/learned.md`.
 3. `.devlog/config.yaml` for the current canonical sections, voice, and tag vocabulary.
 
@@ -64,7 +73,7 @@ Cover:
 - **What was dropped** — discarded ideas, with brief rationale.
 - **Through-lines** — recurring themes worth naming.
 
-Write as a first-hand reflection, not a changelog. Then add the entry to the top of `blog/_index.md`.
+Write as a first-hand reflection, not a changelog. Then add the entry to the top of `<blog_dir>/<index_file>`.
 
 ## Phase 3 — Propose revisions
 

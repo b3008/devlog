@@ -30,6 +30,8 @@ a blog entry and append to it when new durable context emerges.
 - **Stable surface + adaptive surface.** The sentinel block is pinned and idempotent; `learned.md` and discovered tags carry anything that would otherwise make re-installs noisy. When adding new adaptivity, prefer pointers to external files over dynamic rendering into the sentinel block.
 - **Case-study-driven design.** Feature additions on this project tend to come from observing the convention fail on a real project, rather than from up-front speculation. That framing belongs in blog entries when it applies.
 - **Self-referential dogfooding.** devlog is installed on itself, so its own blog is both a test bed and a live example. Entries here should read as genuine project reflections, not demos.
+- **Dogfooding the warm path.** Self-installing devlog on this repo doesn't exercise cold-start failure modes — this repo always has scaffolding present. New surfaces (slash commands, hooks) need explicit cold-repo verification or external review (e.g. PR #9's Copilot review caught the missing-scaffolding gap that local dogfooding could not).
+- **Defensive code introduces new failure surfaces.** Each "make this safer" pass on the install pipeline (PR #10 preflight, PR #11 hashing/reconciliation) introduced its own bugs that the next Copilot round caught. The pattern: new I/O without `try/except`, new schema fields without explicit encoding, new walks that assume the package is intact. Treat every defensive addition as a new failure site that itself needs testing.
 
 ## Landscape / competitors
 
@@ -45,3 +47,5 @@ a blog entry and append to it when new durable context emerges.
 - A future `devlog doctor` or extended `status` could surface `learned.md` freshness, but it's premature without evidence that the file drifts.
 - Claude Code `Stop` hooks as an enforcement mechanism for the "write-in-same-turn" rule remain the obvious next enhancement if the reworded convention proves insufficient.
 - Six pre-2026-05-02 entries still use the old `YYYY-MM-DD-slug.md` format and lack the `timestamp` frontmatter field. Backfill vs. leave-as-legacy is an open call.
+- `manifest.hooks` doesn't carry a `sha256` (unlike `files` and now `commands`). Same drift/customization/overwrite failure mode applies to the Stop hook script. Fix when next touching that surface.
+- Manifest schema is now versioned-by-shape (old records lack `sha256` on commands; new records have it). Next schema change should think about an explicit migration story rather than relying on the loader's fallback to absent fields.
