@@ -6,6 +6,18 @@ Write a new devlog blog entry about: $ARGUMENTS
 
 If the argument is empty or too vague to write a meaningful entry, ask one clarifying question instead of fabricating content. Otherwise, proceed.
 
+## Preflight — bootstrap the project if needed
+
+Check whether the devlog scaffolding exists in this project:
+
+- If `.devlog/config.yaml`, `blog/`, and `blog/_index.md` are all present, skip this section and go to Step 1.
+- If any are missing, the project hasn't been initialized yet. Resolve in this order:
+  1. If a global devlog convention is loaded (look for a "First-time setup" subsection in the active CLAUDE.md), follow its bootstrap instructions: create `blog/`, `blog/media/`, `.devlog/`, `blog/_index.md` (heading = project directory name), and `.devlog/learned.md` (with section headings: Glossary, Entities, Recurring themes, Open threads).
+  2. Otherwise, run `devlog init` if the `devlog` CLI is on PATH.
+  3. Otherwise, ask the user to run `devlog init` and stop here — do not write a half-scaffolded entry.
+
+Once scaffolding exists, proceed.
+
 ## Step 1 — Load context
 
 1. Read `.devlog/config.yaml` to get this project's current sections, voice guidelines, tags, and frontmatter fields. The convention may be customized; defer to the config over your prior assumptions.

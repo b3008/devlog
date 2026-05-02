@@ -4,6 +4,12 @@ description: Audit past devlog entries for what carried through, was revised, or
 
 Manicure the devlog. This is a multi-phase command — work through each phase in order, and pause for user input where indicated. Do not edit existing entries until Phase 4, and only with explicit approval.
 
+## Preflight
+
+If `blog/` does not exist, or it has fewer than two entries, there is nothing meaningful to manicure (a manicure pass needs a small history to audit). Report that briefly and stop. Suggest the user run `/devlog-write <topic>` to start producing entries, and try again once a few have accumulated. Do not scaffold anything.
+
+Otherwise, proceed.
+
 ## Scope
 
 Topic argument (may be empty): $ARGUMENTS
