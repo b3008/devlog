@@ -27,6 +27,7 @@ from rich.tree import Tree
 from devlog_cli.agents import AGENTS, AgentConfig, get_agent
 from devlog_cli.convention import (
     _SENTINEL_START_MARKER,
+    build_index,
     discover_tags,
     generate_convention,
     generate_thin_convention,
@@ -564,6 +565,30 @@ def status() -> None:
                 title="[yellow]Warning[/yellow]",
                 border_style="yellow",
             ))
+
+
+# ── Index command ────────────────────────────────────────────────────────
+
+
+@app.command()
+def index() -> None:
+    """Regenerate the blog index from entry frontmatter (newest first)."""
+    project_root = Path.cwd()
+    config = load_config(project_root)
+    blog_dir = project_root / config["blog_dir"]
+    if not blog_dir.is_dir():
+        console.print(
+            f"[red]No {config['blog_dir']}/ directory here. Run [cyan]devlog init[/cyan] first.[/red]"
+        )
+        raise typer.Exit(1)
+
+    content, count = build_index(project_root, config)
+    index_path = blog_dir / config.get("index_file", "_index.md")
+    index_path.write_text(content, encoding="utf-8")
+    noun = "entry" if count == 1 else "entries"
+    console.print(
+        f"[green]Regenerated {config['blog_dir']}/{index_path.name}[/green] — {count} {noun}."
+    )
 
 
 # ── Version command ──────────────────────────────────────────────────────
