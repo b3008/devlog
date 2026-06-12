@@ -16,6 +16,8 @@ The implemented slice:
 - **Sentinel version stamp**: blocks now open with `<!-- DEVLOG:START v0.2.0 - ... -->`. Backward compatible by construction — detection uses the `<!-- DEVLOG:START` prefix and removal tolerates anything before the closing `-->`, so pre-0.2.0 blocks still parse, and a reinstall upgrades the stamp in place.
 - **`devlog status` drift reporting**: a Version column in the table, plus a warning line when anything a reinstall would change is detected — manifest version older than the running tool, an unstamped (pre-0.2.0) convention block, or installed artifacts whose recorded hashes differ from the currently shipped templates. The hint is always the same: `devlog install --ai <key>` is the upgrade command, and customized files are preserved.
 
+> **Update 2026-06-12** (same day, post-review): "the hint is always the same" didn't survive Copilot. When the manifest or stamp is from a *newer* devlog than the running tool, a resync would downgrade templates — `status` now detects that direction and recommends upgrading the tool instead. The review also split "artifacts differ" from "artifacts lack a recorded hash" (pre-0.2.0 installs are unverifiable, not necessarily different). PR #14's threads carry the details.
+
 **Auto-resync was considered and rejected.** A hook that rewrites CLAUDE.md mid-session mutates context the agent has already loaded, surprises collaborators through VCS diffs, and assumes the CLI is on PATH (the hooks are deliberately stdlib-only). The accepted model: reinstall-as-upgrade (made safe by the morning's carry-forward/hash work), with `status` as the nag. 142 → 150 tests.
 
 ## Why it matters
