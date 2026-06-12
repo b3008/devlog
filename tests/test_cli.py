@@ -567,6 +567,32 @@ class TestStatus:
         assert "differ" in result.output
         assert "resync" in result.output
 
+    def test_missing_hashes_reported_as_unverifiable_not_differing(
+        self, installed_project: Path
+    ):
+        manifest_path = installed_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for cmd in data["commands"]:
+            cmd.pop("sha256", None)
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "lack" in result.output
+        assert "differ" not in result.output
+
+    def test_newer_manifest_recommends_tool_upgrade_not_resync(
+        self, installed_project: Path
+    ):
+        """A manifest written by a newer devlog must not trigger a resync
+        hint — reinstalling with this tool would downgrade the templates."""
+        manifest_path = installed_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["version"] = "99.0.0"
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "newer than this tool" in result.output
+        assert "upgrade devlog" in result.output
+        assert "resync" not in result.output
+
     def test_warns_on_unstamped_legacy_sentinel(self, installed_project: Path):
         claude_md = installed_project / "CLAUDE.md"
         content = claude_md.read_text(encoding="utf-8")

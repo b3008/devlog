@@ -225,11 +225,13 @@ written, devlog's blind spot.
 
 Installs are version-aware: the manifest records the devlog version that
 performed the install, and the sentinel block carries a version stamp
-(`<!-- DEVLOG:START v0.2.0 ... -->`). `status` flags drift — an install
-from an older version, an unstamped convention block, or artifacts whose
-recorded hashes differ from the currently shipped templates — and points
-at `devlog install --ai <key>`, which doubles as the upgrade command
-(customized files are preserved).
+(`<!-- DEVLOG:START v<version> ... -->`). `status` flags drift — an
+install from an older version, an unstamped convention block, or
+artifacts whose recorded hashes differ from the currently shipped
+templates — and points at `devlog install --ai <key>`, which doubles as
+the upgrade command (customized files are preserved). If the install
+was made by a *newer* devlog than the one running, it recommends
+upgrading the tool instead, since a resync would downgrade.
 
 ```
 Blog: blog/ — 3 entries, most recent 2026-04-15
