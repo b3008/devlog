@@ -43,9 +43,13 @@ a blog entry and append to it when new durable context emerges.
 
 ## Open threads
 
-- Does the agent actually read and extend `learned.md` over time, or does it get written once and ignored? Needs real usage data.
+- Does the agent actually read and extend `learned.md` over time, or does it get written once and ignored? `sessions.jsonl` (shipped 2026-06-12) now provides the denominator; needs accumulation time before it answers anything.
 - A future `devlog doctor` or extended `status` could surface `learned.md` freshness, but it's premature without evidence that the file drifts.
-- Claude Code `Stop` hooks as an enforcement mechanism for the "write-in-same-turn" rule remain the obvious next enhancement if the reworded convention proves insufficient.
-- Six pre-2026-05-02 entries still use the old `YYYY-MM-DD-slug.md` format and lack the `timestamp` frontmatter field. Backfill vs. leave-as-legacy is an open call.
-- `manifest.hooks` doesn't carry a `sha256` (unlike `files` and now `commands`). Same drift/customization/overwrite failure mode applies to the Stop hook script. Fix when next touching that surface.
-- Manifest schema is now versioned-by-shape (old records lack `sha256` on commands; new records have it). Next schema change should think about an explicit migration story rather than relying on the loader's fallback to absent fields.
+- Six pre-2026-05-02 entries still use the old `YYYY-MM-DD-slug.md` format and lack the `timestamp` frontmatter field. Backfill vs. leave-as-legacy is an open call. (`devlog index` handles both formats.)
+- Manifest schema is now versioned-by-shape (old records lack `sha256`; new records have it — true for both `commands` and, since 2026-06-12, `hooks`). Next schema change should think about an explicit migration story rather than relying on the loader's fallback to absent fields.
+- Hybrid mutation-gated hook (loud block on mutation turns, silent `additionalContext` otherwise): protocol-verified possible (Stop hooks get `transcript_path`, support exit-0 block JSON and `additionalContext`), exit-0 fix shipped 2026-06-12, `sessions.jsonl` measurement shipped same day. Build only if coverage data shows the always-block reminder is being ignored. Unverified: whether Stop hooks fire in headless `claude -p` mode — docs are silent.
+- Remaining 06-12 expansion threads (not yet built): `superseded_by:` frontmatter/tooling (the convention rule shipped; tooling didn't); shrink the *global* convention toward a lazy-loading stub (the thin local block shipped — global text is still full-size); knowledge-placement policy section (project facts → learned.md, not private harness memory); decision register (formalize Open threads into live/superseded status); epoch distillation for retrieval past ~20 entries. Voice is NOT the problem — agent consumption of the narrative entries worked well; retrieval is.
+
+## Resolved (kept for the record)
+
+- 2026-06-12 shipped, in one pass (branch `assessment-tier1`): exit-0 structured block channel for the Stop hook (red box was self-inflicted protocol mixing); global path fix `~/CLAUDE.md` → `~/.claude/CLAUDE.md` with legacy migration; thin local block when a global install is detected (+ `--full`); `manifest.hooks` sha256 + carry-forward + customization preservation; runtime global-defers-to-local for both hooks (ends double reminders); `devlog index` (generated `_index.md`, convention step 6 updated); SessionEnd → `sessions.jsonl` coverage + `status` reporting; convention steps 7 (supersession annotation) and 8 (commit the entry); media defaults swapped to agent-feasible artifacts.

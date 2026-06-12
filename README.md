@@ -69,6 +69,12 @@ instructions: the agent creates `blog/`, `.devlog/`, and `learned.md` on its
 first entry in any project. Per-project customization is still available via
 `devlog init` + config edits in any repo.
 
+Running a per-project `devlog install` on top of a global install injects a
+**thin pointer block** instead of duplicating the full convention (which
+would cost ~1.5k duplicated context tokens per session and let the copies
+drift). Pass `--full` to force the standalone convention — useful for repos
+whose collaborators don't have the global install.
+
 <br>
 
 ## What actually happens
@@ -122,6 +128,7 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 | `devlog install --ai claude --global` | Install into `~/.claude/CLAUDE.md` so the convention applies to every project. |
 | `devlog uninstall --ai <key>` | Remove the convention section and manifest. |
 | `devlog uninstall --ai claude --global` | Remove the global convention from `~/.claude/`. |
+| `devlog index` | Regenerate `blog/_index.md` from entry frontmatter (newest first). |
 | `devlog list` | List all supported agents. |
 | `devlog status` | Show which agents currently have the convention active. |
 | `devlog version` | Print version. |
@@ -183,28 +190,42 @@ doing — without anyone curating `config.yaml` by hand.
 
 The convention asks the agent to self-check at the end of each turn, but
 agents can interpret rules differently depending on whether the turn
-produced an artifact. For Claude Code, opt into a Stop hook that injects a
-one-shot reminder before the agent ends its turn:
+produced an artifact. For Claude Code, opt into a hook bundle:
 
 ```bash
 devlog install --ai claude --with-hook
 ```
 
-This drops a small script at `.devlog/hooks/stop.py` and merges a `Stop`
-hook entry into `.claude/settings.json` (preserving any existing config).
-Reinstalls are idempotent; `devlog uninstall --ai claude` removes the
-hook entry, deletes the script, and leaves any unrelated settings
-untouched.
+This installs two small scripts under `.devlog/hooks/` and merges the
+matching entries into `.claude/settings.json` (preserving any existing
+config):
+
+- **`stop.py`** (`Stop`) — injects a one-shot reminder before the agent
+  ends its turn, via the structured block channel (no error styling).
+- **`session_end.py`** (`SessionEnd`) — appends one line per session to
+  `.devlog/sessions.jsonl`, so `devlog status` can report sessions that
+  ended without producing an entry.
+
+Reinstalls are idempotent and carry existing hooks forward even without
+the flag (refreshing stale scripts); locally-customized hook scripts are
+detected by hash and preserved. When both global and per-project hooks
+are installed, the global instance defers to the project's at runtime —
+one reminder, one session record. `devlog uninstall --ai claude` removes
+the hook entries, deletes the scripts (unless customized), and leaves
+any unrelated settings untouched.
 
 ### Is it working?
 
 `devlog status` reports whether entries are actually being produced — not
 just whether the sentinel block is present. If the install is more than a
 day old and no entries have been written, it prints a warning with
-remediation hints.
+remediation hints. With the SessionEnd hook installed it also reports
+session coverage — how many sessions ended since the last entry was
+written, devlog's blind spot.
 
 ```
 Blog: blog/ — 3 entries, most recent 2026-04-15
+Sessions: 12 recorded, last 2026-04-17 — 4 since the last entry
 
              Installed Conventions
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━┓
@@ -260,6 +281,8 @@ your-project/
 ├── .devlog/
 │   ├── config.yaml              # stable convention settings
 │   ├── learned.md               # agent-maintained project notebook
+│   ├── hooks/                   # Stop + SessionEnd scripts (--with-hook)
+│   ├── sessions.jsonl           # session coverage log (SessionEnd hook)
 │   └── manifests/
 │       └── claude.manifest.json # install tracking
 ├── .claude/
@@ -288,7 +311,7 @@ Edit `.devlog/config.yaml` to customize:
 | `triggers` | When the agent should write an entry. |
 | `tags` | Base tag vocabulary (auto-extended by discovery). |
 | `frontmatter` | YAML frontmatter fields for each entry. |
-| `media` | Screenshot/capture instructions. Set `enabled: false` to skip. |
+| `media` | Supporting-artifact instructions (CLI output, diffs, Mermaid, user-provided screenshots). Set `enabled: false` to skip. |
 
 Re-run `devlog install --ai <key>` after editing to regenerate the injected
 section.

@@ -55,7 +55,7 @@ Skip any sections that don't apply. Keep the voice consistent with recent entrie
 
 ## Step 4 — Update the index and learned.md
 
-1. Add the new entry to the top of `<blog_dir>/<index_file>` in the existing format.
+1. Regenerate the index: run `devlog index` if the CLI is available; otherwise add the new entry to the top of `<blog_dir>/<index_file>` in the existing format.
 2. If durable project knowledge emerged from this entry — a new term worth naming, a pattern, an open thread — append it tersely to the appropriate section of `.devlog/learned.md`. Do not duplicate what's already there.
 
 ## Step 5 — Report back

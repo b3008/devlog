@@ -10,6 +10,7 @@ from devlog_cli.convention import (
     _extract_frontmatter,
     discover_tags,
     generate_convention,
+    generate_thin_convention,
     inject_convention,
     load_config,
     remove_convention,
@@ -99,6 +100,20 @@ class TestGenerateConvention:
         text = generate_convention(DEFAULT_CONFIG)
         assert ".devlog/learned.md" in text
 
+    def test_supersession_rule(self):
+        text = generate_convention(DEFAULT_CONFIG)
+        assert "supersedes" in text
+        assert "> **Update YYYY-MM-DD**" in text
+
+    def test_commit_entry_rule(self):
+        text = generate_convention(DEFAULT_CONFIG)
+        assert "Commit the entry" in text
+
+    def test_media_defaults_are_agent_feasible(self):
+        text = generate_convention(DEFAULT_CONFIG)
+        assert "Mermaid" in text
+        assert "screenshots and visuals are critical" not in text
+
     def test_custom_tags_rendered(self):
         config = dict(DEFAULT_CONFIG)
         config["tags"] = ["alpha", "beta"]
@@ -121,6 +136,26 @@ class TestGenerateConvention:
         text = generate_convention(DEFAULT_CONFIG, global_mode=False)
         assert "First-time setup" not in text
         assert "This project keeps" in text
+
+
+class TestThinConvention:
+    def test_points_at_global_and_project_surfaces(self):
+        text = generate_thin_convention(DEFAULT_CONFIG)
+        assert "~/.claude/CLAUDE.md" in text
+        assert ".devlog/config.yaml" in text
+        assert ".devlog/learned.md" in text
+        assert "--full" in text  # escape hatch for collaborators
+
+    def test_omits_full_convention_sections(self):
+        text = generate_thin_convention(DEFAULT_CONFIG)
+        assert "### How to write an entry" not in text
+        assert "### Voice and audience" not in text
+
+    def test_respects_custom_blog_dir(self):
+        config = dict(DEFAULT_CONFIG)
+        config["blog_dir"] = "docs/journal"
+        text = generate_thin_convention(config)
+        assert "docs/journal/" in text
 
 
 # ── Convention injection / removal ───────────────────────────────────────
