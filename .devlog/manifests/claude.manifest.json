@@ -1,16 +1,24 @@
 {
   "agent": "claude",
   "version": "0.1.0",
-  "installed_at": "2026-05-02T08:53:35.362867+00:00",
+  "installed_at": "2026-06-12T12:09:04.976650+00:00",
   "files": {
-    "CLAUDE.md": "b37c32897a761b9902c2db5c53f6e60b2a6c339687a54319f991b1f6160a17c4"
+    "CLAUDE.md": "97dfa61209e9ea050e051938b5a8ff6311ccb51f90fa4e145539ca3b3396f0d0"
   },
   "hooks": [
     {
       "event": "Stop",
       "settings_path": ".claude/settings.json",
       "script_path": ".devlog/hooks/stop.py",
-      "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/stop.py\""
+      "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/stop.py\"",
+      "sha256": "dca3cc8abf494e2fbb41669e7194c73b01cf0dfc4d1f959235cc380072e125c0"
+    },
+    {
+      "event": "SessionEnd",
+      "settings_path": ".claude/settings.json",
+      "script_path": ".devlog/hooks/session_end.py",
+      "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/session_end.py\"",
+      "sha256": "c0b541dae883ec991c695ab9421afad086583cf146622467fe768682f51a5db2"
     }
   ],
   "commands": [
@@ -27,7 +35,7 @@
     {
       "name": "devlog-write",
       "path": ".claude/commands/devlog-write.md",
-      "sha256": "3b4554e5d380b5b47193727bbe3e938b945b63949173c6427fca3663e9a092bc"
+      "sha256": "9f15553b973eda302729d5d3848780cd68caa77065b14f956fa301f057385d6a"
     }
   ]
 }
