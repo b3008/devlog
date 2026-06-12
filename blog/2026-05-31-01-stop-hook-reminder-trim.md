@@ -24,6 +24,8 @@ No behavior change. The hook still always blocks the first stop, still passes th
 
 The user opened the session by surfacing a UX pain point: every turn — including read-only `/devlog-catchup`, including pure Q&A — ends with a red **Stop hook error** box in Claude Code's UI. That framing comes from Claude Code's hook protocol: exit code 2 is the only channel a hook has to say "do not stop, show this to the agent", and the UI doesn't distinguish "deliberate soft-block" from "hook exploded". So a deterministic, designed-in reminder reads as an error.
 
+> **Update 2026-06-12**: The premise above is wrong, verified against the hooks docs. Exit code 2 is *not* the only blocking channel — `{"decision": "block", "reason": ...}` JSON with exit **0** blocks the stop without the red error styling. The red box this entry works around was self-inflicted by the script mixing the two protocols (JSON on stdout + exit 2). See [2026-06-12-01-assessment-expanded](2026-06-12-01-assessment-expanded.md); the fix ships with that session's PR.
+
 Over many turns that trains the user to treat the red box as wallpaper — which is exactly the failure mode the hook was designed to prevent.
 
 The trim alone doesn't fix the false-positive rate, but it reduces the cost per false positive. A shorter reminder is faster to scan and dismiss, less visually loud, and stops burying the actual signal ("did this turn warrant an entry?") under boilerplate about how the hook works.
