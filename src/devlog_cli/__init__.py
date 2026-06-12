@@ -24,6 +24,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
+from devlog_cli._version import __version__
 from devlog_cli.agents import AGENTS, AgentConfig, get_agent
 from devlog_cli.convention import (
     _SENTINEL_START_MARKER,
@@ -35,10 +36,9 @@ from devlog_cli.convention import (
     load_config,
     remove_convention,
     scan_entries,
+    sentinel_version,
 )
 from devlog_cli.manifest import Manifest
-
-__version__ = "0.1.0"
 
 LOGO = """\
 [bold cyan]  ██▀▄ █▀▀ █ █ █   ▄▀▄ ▄▀▀[/]
@@ -518,9 +518,11 @@ def status() -> None:
     table.add_column("Agent", style="cyan")
     table.add_column("Context File", style="dim")
     table.add_column("Status")
+    table.add_column("Version", style="dim")
     table.add_column("Installed", style="dim")
 
     earliest_install: Optional[datetime] = None
+    drift_warnings: list[str] = []
     for mf in manifest_files:
         manifest = Manifest.load(mf, project_root)
         if manifest is None:
@@ -532,10 +534,14 @@ def status() -> None:
             continue
 
         ctx_path = project_root / agent.context_file
-        if ctx_path.exists() and _SENTINEL_START_MARKER in ctx_path.read_text(encoding="utf-8"):
-            status_text = "[green]active[/green]"
-        else:
-            status_text = "[red]missing[/red]"
+        ctx_text: Optional[str] = None
+        if ctx_path.exists():
+            try:
+                ctx_text = ctx_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                ctx_text = None
+        block_present = bool(ctx_text) and _SENTINEL_START_MARKER in ctx_text
+        status_text = "[green]active[/green]" if block_present else "[red]missing[/red]"
 
         installed_display = "\u2014"
         if manifest.installed_at:
@@ -547,9 +553,60 @@ def status() -> None:
             except ValueError:
                 pass
 
-        table.add_row(agent.name, agent.context_file, status_text, installed_display)
+        # Drift: anything a reinstall would change. A manifest or stamp from a
+        # NEWER devlog than the running tool flips the advice — resyncing
+        # there would downgrade templates, so the fix is upgrading the tool.
+        issues: list[str] = []
+        upgrade_tool = False
+        mine = _version_tuple(__version__)
+        if manifest.version != __version__:
+            theirs = _version_tuple(manifest.version)
+            if mine is not None and theirs is not None and theirs > mine:
+                issues.append(
+                    f"installed by devlog {manifest.version}, newer than this tool ({__version__})"
+                )
+                upgrade_tool = True
+            else:
+                issues.append(f"installed by devlog {manifest.version}, current is {__version__}")
+        if block_present:
+            stamp = sentinel_version(ctx_text)
+            if stamp is None:
+                issues.append("convention block predates the version stamp")
+            elif stamp != __version__:
+                issues.append(f"convention block is from v{stamp}")
+                stamped = _version_tuple(stamp)
+                if mine is not None and stamped is not None and stamped > mine:
+                    upgrade_tool = True
+        missing_hash, mismatched = _count_stale_artifacts(manifest)
+        if mismatched:
+            noun = "artifact differs" if mismatched == 1 else "artifacts differ"
+            issues.append(f"{mismatched} installed {noun} from the current templates")
+        if missing_hash:
+            noun = "artifact lacks" if missing_hash == 1 else "artifacts lack"
+            issues.append(f"{missing_hash} installed {noun} a recorded hash (pre-0.2.0 install)")
+        if issues:
+            if upgrade_tool:
+                hint = (
+                    "This tool is older than the install — a reinstall would downgrade; "
+                    "upgrade devlog first (e.g. [cyan]uv tool upgrade devlog[/cyan])."
+                )
+            else:
+                hint = (
+                    f"Run [cyan]devlog install --ai {agent_key}[/cyan] to resync "
+                    "(customized files are preserved)."
+                )
+            drift_warnings.append(
+                f"[yellow]{agent.name}:[/yellow] " + "; ".join(issues) + ". " + hint
+            )
+
+        table.add_row(
+            agent.name, agent.context_file, status_text, manifest.version or "\u2014", installed_display
+        )
 
     console.print(table)
+    for warning in drift_warnings:
+        console.print()
+        console.print(warning)
 
     # Warn if the convention may not be firing
     if earliest_install is not None and entry_count == 0:
@@ -648,6 +705,45 @@ def _read_session_log(
     except (OSError, UnicodeDecodeError):
         return 0, None, 0
     return total, (last_ts[:10] if last_ts else None), since_entry
+
+
+def _version_tuple(version: str) -> tuple[int, ...] | None:
+    """Parse 'X.Y.Z' into a comparable tuple; None when unparseable."""
+    try:
+        return tuple(int(part) for part in str(version).strip().split("."))
+    except ValueError:
+        return None
+
+
+def _count_stale_artifacts(manifest: Manifest) -> tuple[int, int]:
+    """Classify installed artifacts against the templates this version ships.
+
+    Returns ``(missing_hash, mismatched)`` — records with no recorded hash
+    (pre-0.2.0 installs: unverifiable, not necessarily different) and records
+    whose recorded hash differs from the current template (what a reinstall
+    would refresh; includes user-customized files, which reinstall preserves)."""
+    missing = 0
+    mismatched = 0
+
+    def check(record_hash: str | None, template: Path) -> None:
+        nonlocal missing, mismatched
+        template_hash = _safe_file_hash(template)
+        if not template_hash:
+            return
+        if not record_hash:
+            missing += 1
+        elif record_hash != template_hash:
+            mismatched += 1
+
+    for cmd in manifest.commands:
+        name = cmd.get("name")
+        if name:
+            check(cmd.get("sha256"), _templates_dir() / "commands" / f"{name}.md")
+    for hook in manifest.hooks:
+        rel = hook.get("script_path")
+        if rel:
+            check(hook.get("sha256"), _templates_dir() / "hooks" / Path(rel).name)
+    return missing, mismatched
 
 
 def _global_install_detected(agent: AgentConfig) -> bool:

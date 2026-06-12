@@ -542,6 +542,68 @@ class TestStatus:
         result = runner.invoke(app, ["status"])
         assert "recorded" not in result.output
 
+    def test_shows_version_no_drift_when_current(self, installed_project: Path):
+        from devlog_cli import __version__
+
+        result = runner.invoke(app, ["status"])
+        assert __version__ in result.output
+        assert "resync" not in result.output
+
+    def test_warns_on_version_drift(self, installed_project: Path):
+        manifest_path = installed_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["version"] = "0.1.0"
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "0.1.0" in result.output
+        assert "resync" in result.output
+
+    def test_warns_on_stale_artifacts(self, installed_project: Path):
+        manifest_path = installed_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["commands"][0]["sha256"] = "0" * 64
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "differ" in result.output
+        assert "resync" in result.output
+
+    def test_missing_hashes_reported_as_unverifiable_not_differing(
+        self, installed_project: Path
+    ):
+        manifest_path = installed_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for cmd in data["commands"]:
+            cmd.pop("sha256", None)
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "lack" in result.output
+        assert "differ" not in result.output
+
+    def test_newer_manifest_recommends_tool_upgrade_not_resync(
+        self, installed_project: Path
+    ):
+        """A manifest written by a newer devlog must not trigger a resync
+        hint — reinstalling with this tool would downgrade the templates."""
+        manifest_path = installed_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["version"] = "99.0.0"
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "newer than this tool" in result.output
+        assert "upgrade devlog" in result.output
+        assert "resync" not in result.output
+
+    def test_warns_on_unstamped_legacy_sentinel(self, installed_project: Path):
+        claude_md = installed_project / "CLAUDE.md"
+        content = claude_md.read_text(encoding="utf-8")
+        # Rewrite the start sentinel in the pre-0.2.0 unstamped format.
+        start = content.index("<!-- DEVLOG:START")
+        end = content.index("-->", start) + 3
+        legacy = content[:start] + "<!-- DEVLOG:START - Do not edit manually. -->" + content[end:]
+        claude_md.write_text(legacy, encoding="utf-8")
+        result = runner.invoke(app, ["status"])
+        assert "predates" in result.output
+
 
 class TestGlobalInstall:
     def test_creates_global_claude_md(self, project_dir: Path, monkeypatch):
@@ -714,6 +776,8 @@ class TestListAgents:
 
 class TestVersion:
     def test_shows_version(self, project_dir: Path):
+        from devlog_cli import __version__
+
         result = runner.invoke(app, ["version"])
         assert result.exit_code == 0
-        assert "0.1.0" in result.output
+        assert __version__ in result.output

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from devlog_cli._version import __version__
 from devlog_cli.convention import (
     _SENTINEL_START_MARKER,
     DEFAULT_CONFIG,
@@ -15,6 +16,7 @@ from devlog_cli.convention import (
     load_config,
     remove_convention,
     scan_entries,
+    sentinel_version,
 )
 
 # ── Frontmatter extraction ──────────────────────────────────────────────
@@ -193,6 +195,36 @@ class TestInjection:
         injected = inject_convention("", "convention text")
         removed = remove_convention(injected)
         assert removed == ""
+
+
+class TestSentinelVersion:
+    def test_injected_block_carries_current_version(self):
+        result = inject_convention("", "convention text")
+        assert f"DEVLOG:START v{__version__}" in result
+        assert sentinel_version(result) == __version__
+
+    def test_legacy_unstamped_block_returns_none(self):
+        legacy = (
+            "<!-- DEVLOG:START - Do not edit manually. Remove with: devlog uninstall --ai <key> -->\n"
+            "old convention\n"
+            "<!-- DEVLOG:END -->\n"
+        )
+        assert sentinel_version(legacy) is None
+
+    def test_legacy_block_still_removable(self):
+        legacy = (
+            "# My rules\n\n"
+            "<!-- DEVLOG:START - old format -->\nold convention\n<!-- DEVLOG:END -->\n"
+        )
+        removed = remove_convention(legacy)
+        assert "old convention" not in removed
+        assert "# My rules" in removed
+
+    def test_reinject_upgrades_stamp(self):
+        legacy = "<!-- DEVLOG:START - old format -->\nold\n<!-- DEVLOG:END -->\n"
+        result = inject_convention(legacy, "new convention")
+        assert sentinel_version(result) == __version__
+        assert result.count(_SENTINEL_START_MARKER) == 1
 
 
 # ── Tag discovery ────────────────────────────────────────────────────────
