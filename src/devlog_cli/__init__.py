@@ -29,6 +29,7 @@ from devlog_cli.convention import (
     _SENTINEL_START_MARKER,
     discover_tags,
     generate_convention,
+    generate_thin_convention,
     inject_convention,
     load_config,
     remove_convention,
@@ -142,6 +143,12 @@ def install(
         "--global",
         help="(claude only) Install into ~/.claude/ so the convention applies to every project.",
     ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Inject the full convention even when a global install is detected "
+        "(useful for repos shared with collaborators who lack the global install).",
+    ),
 ) -> None:
     """Inject the blog convention into an agent's context file."""
     try:
@@ -158,10 +165,10 @@ def install(
     if global_:
         _install_global(agent, with_hook=with_hook)
     else:
-        _install_local(agent, with_hook=with_hook)
+        _install_local(agent, with_hook=with_hook, full=full)
 
 
-def _install_local(agent: AgentConfig, *, with_hook: bool) -> None:
+def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -> None:
     """Per-project install: inject convention into the project's context file."""
     project_root = Path.cwd()
 
@@ -192,11 +199,21 @@ def _install_local(agent: AgentConfig, *, with_hook: bool) -> None:
     if discovered:
         config["tags"] = sorted(base_tags | discovered)
 
-    convention_text = generate_convention(config)
+    # When the full convention is already injected globally, drop a thin
+    # pointer block instead of duplicating ~1.5k tokens in every session.
+    thin = agent.key == "claude" and not full and _global_install_detected(agent)
+    convention_text = (
+        generate_thin_convention(config) if thin else generate_convention(config)
+    )
     manifest = Manifest(agent_key=agent.key, project_root=project_root, version=__version__)
     previous_manifest = Manifest.load(manifest_path, project_root) if manifest_path.exists() else None
 
     tree = Tree(f"[bold green]Installing devlog convention[/bold green] — {agent.name}")
+    if thin:
+        tree.add(
+            "[green]Global install detected — using the thin project block[/green] "
+            "([dim]re-run with --full for the standalone convention[/dim])"
+        )
     if new_tags:
         tree.add(f"[green]Discovered {len(new_tags)} new tag(s) from entries: {', '.join(new_tags)}[/green]")
 
@@ -566,6 +583,27 @@ def version() -> None:
 def _templates_dir() -> Path:
     """Find the bundled templates directory."""
     return Path(__file__).parent / "templates"
+
+
+def _global_install_detected(agent: AgentConfig) -> bool:
+    """True when a devlog global install for this agent is present and its
+    convention block is actually in place (manifest alone isn't enough — the
+    user may have removed the file)."""
+    home = Path.home()
+    manifest_path = home / ".devlog" / "manifests" / f"{agent.key}.manifest.json"
+    if not manifest_path.exists():
+        return False
+    candidates = (
+        home / GLOBAL_CONTEXT_DIR_REL / agent.context_file,
+        home / agent.context_file,  # legacy pre-migration location
+    )
+    for path in candidates:
+        try:
+            if path.exists() and _SENTINEL_START_MARKER in path.read_text(encoding="utf-8"):
+                return True
+        except (OSError, UnicodeDecodeError):
+            continue
+    return False
 
 
 def _remove_convention_from(ctx_path: Path, display: str, *, quiet_if_absent: bool = False) -> None:

@@ -375,6 +375,45 @@ class TestSlashCommands:
         assert orphan.read_text(encoding="utf-8") == "user-edited ghost\n"
 
 
+class TestThinLocalBlock:
+    """With a global install present, local installs drop a thin pointer
+    block instead of duplicating the full convention in every session."""
+
+    def test_thin_block_when_global_installed(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        content = (initialized_project / "CLAUDE.md").read_text(encoding="utf-8")
+        assert _SENTINEL_START_MARKER in content
+        assert "full convention" in content
+        assert "### How to write an entry" not in content
+        assert "thin project block" in result.output
+
+    def test_full_flag_overrides_detection(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        result = runner.invoke(app, ["install", "--ai", "claude", "--full"])
+        assert result.exit_code == 0
+        content = (initialized_project / "CLAUDE.md").read_text(encoding="utf-8")
+        assert "### How to write an entry" in content
+
+    def test_full_block_without_global_install(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        content = (initialized_project / "CLAUDE.md").read_text(encoding="utf-8")
+        assert "### How to write an entry" in content
+
+    def test_manifest_without_convention_not_enough(
+        self, initialized_project: Path, isolated_home: Path
+    ):
+        # A stale global manifest with no actual convention block must not
+        # trigger the thin path — the agent would be left with no rules at all.
+        manifests = isolated_home / ".devlog" / "manifests"
+        manifests.mkdir(parents=True)
+        (manifests / "claude.manifest.json").write_text("{}", encoding="utf-8")
+        runner.invoke(app, ["install", "--ai", "claude"])
+        content = (initialized_project / "CLAUDE.md").read_text(encoding="utf-8")
+        assert "### How to write an entry" in content
+
+
 class TestUninstall:
     def test_removes_convention(self, installed_project: Path):
         result = runner.invoke(app, ["uninstall", "--ai", "claude"])

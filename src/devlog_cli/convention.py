@@ -261,6 +261,24 @@ Prefer tags from this list. If a new tag genuinely fits and recurs, use it in th
     return text
 
 
+def generate_thin_convention(config: dict[str, Any]) -> str:
+    """Generate the abbreviated project block used when the full convention is
+    already injected globally (~/.claude/CLAUDE.md).
+
+    Injecting the full text in both places duplicates ~1.5k tokens in every
+    session and lets the two copies drift; the thin block points at the global
+    copy and carries only the project-specific pointers."""
+    blog_dir = config["blog_dir"]
+    return f"""\
+## Development Blog (Automatic)
+
+This project keeps a development blog in `{blog_dir}/`. The full convention — triggers, entry format, voice, tags — is in your global CLAUDE.md (`~/.claude/CLAUDE.md`, installed by devlog); follow it here. Project-specific settings live in `.devlog/config.yaml` and take precedence over the global defaults.
+
+Before writing an entry, read `.devlog/learned.md` for accumulated project vocabulary, themes, and open threads — and extend it when durable knowledge emerges.
+
+Collaborators without the global devlog install: run `devlog install --ai claude --full` in this project to inject the standalone convention here instead."""
+
+
 def wrap_with_sentinels(content: str) -> str:
     """Wrap convention text with sentinel markers for safe injection/removal."""
     return f"{SENTINEL_START}\n{content}\n{SENTINEL_END}\n"
