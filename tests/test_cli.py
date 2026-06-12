@@ -125,6 +125,55 @@ class TestInstallWithHook:
         assert len(data["hooks"]) == 1
         assert data["hooks"][0]["event"] == "Stop"
 
+    def test_manifest_records_hook_sha256(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        data = json.loads(
+            (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text(encoding="utf-8")
+        )
+        assert len(data["hooks"][0]["sha256"]) == 64
+
+    def test_reinstall_without_flag_carries_hook_forward(self, initialized_project: Path):
+        """A reinstall without --with-hook must not orphan an installed hook:
+        settings.json keeps firing it, so the manifest must keep tracking it."""
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        result = runner.invoke(app, ["install", "--ai", "claude"])
+        assert result.exit_code == 0
+        data = json.loads(
+            (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text(encoding="utf-8")
+        )
+        assert len(data["hooks"]) == 1
+        settings = json.loads(
+            (initialized_project / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
+        assert len(settings["hooks"]["Stop"]) == 1
+        assert "Refreshed existing Stop hook" in result.output
+
+    def test_reinstall_refreshes_stale_hook_script(self, initialized_project: Path):
+        """An unmodified script from an older version (disk hash == recorded
+        hash != new template hash) gets resynced from the template."""
+        import hashlib
+
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        old = "# old template version\n"
+        script.write_text(old, encoding="utf-8")
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["hooks"][0]["sha256"] = hashlib.sha256(old.encode("utf-8")).hexdigest()
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        assert script.read_text(encoding="utf-8") != old
+
+    def test_reinstall_preserves_customized_hook_script(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        script.write_text("# my custom hook\n", encoding="utf-8")
+        result = runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        assert result.exit_code == 0
+        assert script.read_text(encoding="utf-8") == "# my custom hook\n"
+        assert "Preserved" in result.output
+
     def test_rejected_for_non_claude(self, initialized_project: Path):
         result = runner.invoke(app, ["install", "--ai", "copilot", "--with-hook"])
         assert result.exit_code == 1
@@ -346,6 +395,15 @@ class TestUninstall:
         assert (initialized_project / ".devlog" / "hooks" / "stop.py").exists()
         runner.invoke(app, ["uninstall", "--ai", "claude"])
         assert not (initialized_project / ".devlog" / "hooks" / "stop.py").exists()
+
+    def test_uninstall_preserves_customized_hook_script(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        script.write_text("# my custom hook\n", encoding="utf-8")
+        result = runner.invoke(app, ["uninstall", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert script.exists()
+        assert script.read_text(encoding="utf-8") == "# my custom hook\n"
 
     def test_hook_removal_preserves_settings(self, initialized_project: Path):
         settings_dir = initialized_project / ".claude"
