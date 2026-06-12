@@ -2,6 +2,9 @@
 
 <!-- Newest entries at the top -->
 
+- 2026-06-12 — [Assessment expanded: the constraint flipped from capture to consumption](2026-06-12-01-assessment-expanded.md)
+- 2026-06-11 — [Assessment: how useful is devlog for agent-coded codebases?](2026-06-11-01-agent-codebase-assessment.md)
+- 2026-05-31 — [Trimming the Stop hook reminder, deferring the smarter-hook idea](2026-05-31-01-stop-hook-reminder-trim.md)
 - 2026-05-02 — [Round three: Copilot finds the failure modes I added by handling failure modes](2026-05-02-07-copilot-review-round-three.md)
 - 2026-05-02 — [Second pass on the Copilot review: config-aware templates + hashed command manifest](2026-05-02-06-copilot-review-round-two.md)
 - 2026-05-02 — [Copilot review catches the slash commands' missing-scaffolding gap](2026-05-02-05-copilot-review-preflight-fix.md)
