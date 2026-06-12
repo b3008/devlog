@@ -85,6 +85,7 @@ class TestInstallWithHook:
         result = runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
         assert result.exit_code == 0
         assert (initialized_project / ".devlog" / "hooks" / "stop.py").exists()
+        assert (initialized_project / ".devlog" / "hooks" / "session_end.py").exists()
         assert (initialized_project / ".claude" / "settings.json").exists()
 
     def test_settings_json_structure(self, initialized_project: Path):
@@ -117,13 +118,20 @@ class TestInstallWithHook:
         )
         assert len(settings["hooks"]["Stop"]) == 1
 
-    def test_manifest_records_hook(self, initialized_project: Path):
+    def test_manifest_records_hook_bundle(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
         data = json.loads(
             (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text()
         )
-        assert len(data["hooks"]) == 1
-        assert data["hooks"][0]["event"] == "Stop"
+        assert {h["event"] for h in data["hooks"]} == {"Stop", "SessionEnd"}
+
+    def test_settings_records_session_end(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        settings = json.loads(
+            (initialized_project / ".claude" / "settings.json").read_text()
+        )
+        commands = [h["command"] for h in settings["hooks"]["SessionEnd"][0]["hooks"]]
+        assert any("session_end.py" in c for c in commands)
 
     def test_manifest_records_hook_sha256(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
@@ -141,7 +149,7 @@ class TestInstallWithHook:
         data = json.loads(
             (initialized_project / ".devlog" / "manifests" / "claude.manifest.json").read_text(encoding="utf-8")
         )
-        assert len(data["hooks"]) == 1
+        assert {h["event"] for h in data["hooks"]} == {"Stop", "SessionEnd"}
         settings = json.loads(
             (initialized_project / ".claude" / "settings.json").read_text(encoding="utf-8")
         )
@@ -484,6 +492,20 @@ class TestStatus:
     def test_no_entries_shown(self, installed_project: Path):
         result = runner.invoke(app, ["status"])
         assert "no entries yet" in result.output
+
+    def test_session_coverage_line(self, installed_project: Path, sample_entry: Path):
+        (installed_project / ".devlog" / "sessions.jsonl").write_text(
+            '{"ts": "2026-04-17T10:00:00+00:00", "session_id": "a", "reason": "exit"}\n'
+            '{"ts": "2026-04-18T10:00:00+00:00", "session_id": "b", "reason": "exit"}\n',
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["status"])
+        assert "2 recorded" in result.output
+        assert "2 since the last entry" in result.output
+
+    def test_no_session_line_without_log(self, installed_project: Path):
+        result = runner.invoke(app, ["status"])
+        assert "recorded" not in result.output
 
 
 class TestGlobalInstall:

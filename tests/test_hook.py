@@ -8,6 +8,17 @@ import sys
 from pathlib import Path
 
 HOOK_SCRIPT = Path(__file__).parent.parent / "src" / "devlog_cli" / "templates" / "hooks" / "stop.py"
+SESSION_HOOK_SCRIPT = (
+    Path(__file__).parent.parent / "src" / "devlog_cli" / "templates" / "hooks" / "session_end.py"
+)
+
+
+def _clean_env(**overrides: str) -> dict[str, str]:
+    """Inherited env minus CLAUDE_PROJECT_DIR (set when the test process runs
+    under Claude Code — leaking it would point hooks at the real repo)."""
+    env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
+    env.update(overrides)
+    return env
 
 
 def _run_hook(payload: dict) -> tuple[int, str]:
@@ -144,3 +155,112 @@ class TestGlobalDefersToLocal:
         )
         assert result.returncode == 0
         assert json.loads(result.stdout)["decision"] == "block"
+
+
+class TestSessionEndHook:
+    def _run(self, payload: dict, script: Path | None = None, **env_overrides: str):
+        return subprocess.run(
+            [sys.executable, str(script or SESSION_HOOK_SCRIPT)],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            env=_clean_env(**env_overrides),
+        )
+
+    def _project(self, tmp_path: Path) -> Path:
+        project = tmp_path / "proj"
+        (project / ".devlog").mkdir(parents=True)
+        return project
+
+    def test_appends_record_via_project_dir_env(self, tmp_path: Path):
+        project = self._project(tmp_path)
+        result = self._run(
+            {"session_id": "s1", "reason": "exit"},
+            CLAUDE_PROJECT_DIR=str(project),
+            HOME=str(tmp_path / "home"),
+        )
+        assert result.returncode == 0
+        records = [
+            json.loads(line)
+            for line in (project / ".devlog" / "sessions.jsonl").read_text().splitlines()
+        ]
+        assert records[0]["session_id"] == "s1"
+        assert records[0]["reason"] == "exit"
+        assert records[0]["ts"]
+
+    def test_falls_back_to_payload_cwd(self, tmp_path: Path):
+        project = self._project(tmp_path)
+        result = self._run(
+            {"session_id": "s2", "cwd": str(project)},
+            HOME=str(tmp_path / "home"),
+        )
+        assert result.returncode == 0
+        assert (project / ".devlog" / "sessions.jsonl").exists()
+
+    def test_ignores_non_devlog_project(self, tmp_path: Path):
+        project = tmp_path / "plain"
+        project.mkdir()
+        result = self._run(
+            {"session_id": "s3", "cwd": str(project)},
+            HOME=str(tmp_path / "home"),
+        )
+        assert result.returncode == 0
+        assert not (project / ".devlog").exists()
+
+    def test_malformed_input_exits_clean(self, tmp_path: Path):
+        result = subprocess.run(
+            [sys.executable, str(SESSION_HOOK_SCRIPT)],
+            input="not json",
+            capture_output=True,
+            text=True,
+            env=_clean_env(HOME=str(tmp_path / "home")),
+        )
+        assert result.returncode == 0
+
+    def test_global_instance_defers_to_local(self, tmp_path: Path):
+        home = tmp_path / "home"
+        hook_dir = home / ".devlog" / "hooks"
+        hook_dir.mkdir(parents=True)
+        global_script = hook_dir / "session_end.py"
+        global_script.write_bytes(SESSION_HOOK_SCRIPT.read_bytes())
+
+        project = self._project(tmp_path)
+        claude_dir = project / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.json").write_text(
+            json.dumps({
+                "hooks": {
+                    "SessionEnd": [{
+                        "hooks": [{
+                            "type": "command",
+                            "command": 'python3 "$CLAUDE_PROJECT_DIR/.devlog/hooks/session_end.py"',
+                        }]
+                    }]
+                }
+            }),
+            encoding="utf-8",
+        )
+        result = self._run(
+            {"session_id": "s4", "cwd": str(project)},
+            script=global_script,
+            HOME=str(home),
+        )
+        assert result.returncode == 0
+        # The local hook owns recording; the global instance must not write.
+        assert not (project / ".devlog" / "sessions.jsonl").exists()
+
+    def test_global_instance_records_without_local(self, tmp_path: Path):
+        home = tmp_path / "home"
+        hook_dir = home / ".devlog" / "hooks"
+        hook_dir.mkdir(parents=True)
+        global_script = hook_dir / "session_end.py"
+        global_script.write_bytes(SESSION_HOOK_SCRIPT.read_bytes())
+
+        project = self._project(tmp_path)
+        result = self._run(
+            {"session_id": "s5", "cwd": str(project)},
+            script=global_script,
+            HOME=str(home),
+        )
+        assert result.returncode == 0
+        assert (project / ".devlog" / "sessions.jsonl").exists()

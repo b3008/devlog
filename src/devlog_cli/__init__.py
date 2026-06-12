@@ -252,15 +252,10 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
         for rel in orphans:
             tree.add(f"[yellow]Removed orphaned slash command[/yellow] [dim]{rel}[/dim]")
 
-    # Install the Claude Code Stop hook \u2014 when requested, or carried forward
-    # from a previous install (a reinstall without --with-hook must not
-    # orphan a hook that settings.json still points at; refreshing also
-    # resyncs stale scripts).
-    prev_hook = _previous_stop_hook(previous_manifest) if agent.key == "claude" else None
-    if with_hook or prev_hook:
-        hook_record, hook_preserved = _install_claude_stop_hook(project_root, prev_hook)
-        manifest.hooks.append(hook_record)
-        _add_hook_tree_line(tree, hook_record, hook_preserved, carried=not with_hook)
+    # Install the Claude Code hooks \u2014 when requested, or carried forward
+    # from a previous install.
+    if agent.key == "claude":
+        _install_claude_hooks(project_root, previous_manifest, with_hook, tree, manifest)
 
     manifest.save()
     tree.add("[dim]Manifest saved[/dim]")
@@ -272,7 +267,7 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
         f"[green]Done.[/green] {agent.name} will now maintain a development blog "
         f"in [cyan]{config['blog_dir']}/[/cyan]."
     )
-    if not with_hook and prev_hook is None and agent.key == "claude":
+    if not manifest.hooks and agent.key == "claude":
         console.print(
             "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a Claude Code "
             "Stop hook that nudges the agent before each turn ends.[/dim]"
@@ -356,15 +351,11 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
         for rel in orphans:
             tree.add(f"[yellow]Removed orphaned global slash command[/yellow] [dim]~/{rel}[/dim]")
 
-    # Install the global Stop hook \u2014 when requested, or carried forward from
-    # a previous install (see the local-install comment).
-    prev_hook = _previous_stop_hook(previous_manifest)
-    if with_hook or prev_hook:
-        hook_record, hook_preserved = _install_claude_stop_hook(home, prev_hook, global_mode=True)
-        manifest.hooks.append(hook_record)
-        _add_hook_tree_line(
-            tree, hook_record, hook_preserved, carried=not with_hook, display_prefix="~/"
-        )
+    # Install the global hooks \u2014 when requested, or carried forward from a
+    # previous install.
+    _install_claude_hooks(
+        home, previous_manifest, with_hook, tree, manifest, global_mode=True, display_prefix="~/"
+    )
 
     manifest.save()
     tree.add("[dim]Manifest saved[/dim]")
@@ -377,7 +368,7 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
         "[dim]Per-project customization: run [cyan]devlog init[/cyan] in any project to drop a "
         ".devlog/config.yaml with custom triggers, voice, and tags.[/dim]"
     )
-    if not with_hook and prev_hook is None:
+    if not manifest.hooks:
         console.print(
             "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a global Stop hook.[/dim]"
         )
@@ -432,11 +423,10 @@ def uninstall(
         )
 
     # Remove any installed hooks recorded in the manifest
-    if manifest is not None:
+    if manifest is not None and ai == "claude":
         for hook in manifest.hooks:
-            if hook.get("event") == "Stop" and ai == "claude":
-                for action in _uninstall_claude_stop_hook(root_dir, hook):
-                    console.print(f"[green]{action}[/green]")
+            for action in _uninstall_claude_hook(root_dir, hook):
+                console.print(f"[green]{action}[/green]")
 
     # Remove any installed slash commands recorded in the manifest
     if manifest is not None:
@@ -510,6 +500,18 @@ def status() -> None:
             f"[bold]Blog:[/bold] [cyan]{blog_dir}/[/cyan] \u2014 "
             f"{entry_count} {noun}, most recent [green]{latest_entry}[/green]"
         )
+
+    # Session coverage, recorded by the SessionEnd hook when installed.
+    # Sessions newer than the latest entry are the convention's blind spot:
+    # work may have happened there without leaving a trace in the blog.
+    total_sessions, last_session, since_entry = _read_session_log(project_root, latest_entry)
+    if total_sessions:
+        line = f"[bold]Sessions:[/bold] {total_sessions} recorded"
+        if last_session:
+            line += f", last [green]{last_session}[/green]"
+        if since_entry:
+            line += f" \u2014 [yellow]{since_entry} since the last entry[/yellow]"
+        console.print(line)
     console.print()
 
     table = Table(title="Installed Conventions")
@@ -610,6 +612,41 @@ def _templates_dir() -> Path:
     return Path(__file__).parent / "templates"
 
 
+def _read_session_log(
+    project_root: Path, latest_entry: str | None
+) -> tuple[int, str | None, int]:
+    """Summarize .devlog/sessions.jsonl (written by the SessionEnd hook).
+
+    Returns ``(total, last_session_date, sessions_since_latest_entry)``;
+    ``(0, None, 0)`` when the log is absent or unreadable."""
+    sessions_path = project_root / ".devlog" / "sessions.jsonl"
+    if not sessions_path.exists():
+        return 0, None, 0
+    total = 0
+    last_ts: str | None = None
+    since_entry = 0
+    try:
+        lines = sessions_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return 0, None, 0
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(rec, dict):
+            continue
+        total += 1
+        ts = str(rec.get("ts") or "")
+        if ts and (last_ts is None or ts > last_ts):
+            last_ts = ts
+        if latest_entry and ts[:10] > latest_entry:
+            since_entry += 1
+    return total, (last_ts[:10] if last_ts else None), since_entry
+
+
 def _global_install_detected(agent: AgentConfig) -> bool:
     """True when a devlog global install for this agent is present and its
     convention block is actually in place (manifest alone isn't enough — the
@@ -664,31 +701,43 @@ CLAUDE_SETTINGS_REL = ".claude/settings.json"
 # memory), not the home directory root (which only loads via ancestor traversal).
 GLOBAL_CONTEXT_DIR_REL = ".claude"
 STOP_HOOK_SCRIPT_REL = ".devlog/hooks/stop.py"
-STOP_HOOK_COMMAND_LOCAL = f'python3 "$CLAUDE_PROJECT_DIR/{STOP_HOOK_SCRIPT_REL}"'
-STOP_HOOK_COMMAND_GLOBAL = f'python3 "$HOME/{STOP_HOOK_SCRIPT_REL}"'
+SESSION_HOOK_SCRIPT_REL = ".devlog/hooks/session_end.py"
+# The (event, script) pairs that --with-hook installs: the Stop reminder and
+# the SessionEnd coverage recorder.
+CLAUDE_HOOKS: list[tuple[str, str]] = [
+    ("Stop", STOP_HOOK_SCRIPT_REL),
+    ("SessionEnd", SESSION_HOOK_SCRIPT_REL),
+]
 
 
-def _install_claude_stop_hook(
+def _hook_command(script_rel: str, *, global_mode: bool) -> str:
+    var = "$HOME" if global_mode else "$CLAUDE_PROJECT_DIR"
+    return f'python3 "{var}/{script_rel}"'
+
+
+def _install_claude_hook(
     root_dir: Path,
+    event: str,
+    script_rel: str,
     previous: dict[str, Any] | None = None,
     *,
     global_mode: bool = False,
 ) -> tuple[dict[str, Any], bool]:
-    """Copy the stop hook script and register it in settings.json.
+    """Copy a hook script and register it under `event` in settings.json.
 
     root_dir is the project root (per-project) or Path.home() (global).
-    `previous` is the prior manifest's hook record, used to detect user
-    customizations of the script (mirroring slash-command handling).
+    `previous` is the prior manifest's record for this event, used to detect
+    user customizations of the script (mirroring slash-command handling).
 
     Returns ``(record, preserved)`` — the manifest record, and whether an
     existing customized script was left untouched instead of overwritten.
     """
-    command = STOP_HOOK_COMMAND_GLOBAL if global_mode else STOP_HOOK_COMMAND_LOCAL
+    command = _hook_command(script_rel, global_mode=global_mode)
 
     # 1. Copy the hook script — unless the user customized it since install.
-    src = _templates_dir() / "hooks" / "stop.py"
+    src = _templates_dir() / "hooks" / Path(script_rel).name
     new_hash = Manifest._sha256(src.read_text(encoding="utf-8"))
-    script_dst = root_dir / STOP_HOOK_SCRIPT_REL
+    script_dst = root_dir / script_rel
     script_dst.parent.mkdir(parents=True, exist_ok=True)
 
     preserved = False
@@ -721,12 +770,13 @@ def _install_claude_stop_hook(
             raise typer.Exit(1)
 
     hooks_root = settings.setdefault("hooks", {})
-    stop_entries: list[dict[str, Any]] = hooks_root.setdefault("Stop", [])
+    event_entries: list[dict[str, Any]] = hooks_root.setdefault(event, [])
 
-    # Strip any prior devlog-installed Stop hook so reinstalls are idempotent.
-    stop_entries[:] = [e for e in stop_entries if not _is_devlog_stop_entry(e)]
+    # Strip any prior devlog-installed entry for this event so reinstalls are
+    # idempotent.
+    event_entries[:] = [e for e in event_entries if not _is_devlog_hook_entry(e, script_rel)]
 
-    stop_entries.append({
+    event_entries.append({
         "hooks": [
             {"type": "command", "command": command}
         ]
@@ -739,19 +789,41 @@ def _install_claude_stop_hook(
     )
 
     return {
-        "event": "Stop",
+        "event": event,
         "settings_path": CLAUDE_SETTINGS_REL,
-        "script_path": STOP_HOOK_SCRIPT_REL,
+        "script_path": script_rel,
         "command": command,
         "sha256": record_hash,
     }, preserved
 
 
-def _previous_stop_hook(previous_manifest: Optional[Manifest]) -> dict[str, Any] | None:
-    """Return the prior manifest's Stop hook record, if one was installed."""
-    if previous_manifest is None:
-        return None
-    return next((h for h in previous_manifest.hooks if h.get("event") == "Stop"), None)
+def _install_claude_hooks(
+    root_dir: Path,
+    previous_manifest: Optional[Manifest],
+    with_hook: bool,
+    tree: Tree,
+    manifest: Manifest,
+    *,
+    global_mode: bool = False,
+    display_prefix: str = "",
+) -> None:
+    """Install the devlog hook bundle when requested (--with-hook) or carried
+    forward from a previous install. A reinstall without --with-hook must not
+    orphan hooks that settings.json still points at; refreshing also resyncs
+    stale scripts."""
+    prev_hooks = previous_manifest.hooks if previous_manifest else []
+    if not (with_hook or prev_hooks):
+        return
+    for event, script_rel in CLAUDE_HOOKS:
+        prev = next((h for h in prev_hooks if h.get("event") == event), None)
+        hook_record, preserved = _install_claude_hook(
+            root_dir, event, script_rel, prev, global_mode=global_mode
+        )
+        manifest.hooks.append(hook_record)
+        carried = not with_hook and prev is not None
+        _add_hook_tree_line(
+            tree, hook_record, preserved, carried=carried, display_prefix=display_prefix
+        )
 
 
 def _add_hook_tree_line(
@@ -762,34 +834,37 @@ def _add_hook_tree_line(
     carried: bool,
     display_prefix: str = "",
 ) -> None:
-    """Report what happened to the Stop hook during install."""
+    """Report what happened to a hook during install."""
+    event = hook_record.get("event", "")
     paths = (
         f"[dim]{display_prefix}{hook_record['script_path']} → "
         f"{display_prefix}{hook_record['settings_path']}[/dim]"
     )
     if preserved:
         tree.add(
-            f"[yellow]Preserved customized Stop hook script[/yellow] ({paths} — local edits kept)"
+            f"[yellow]Preserved customized {event} hook script[/yellow] ({paths} — local edits kept)"
         )
     elif carried:
-        tree.add(f"[green]Refreshed existing Stop hook[/green] ({paths})")
+        tree.add(f"[green]Refreshed existing {event} hook[/green] ({paths})")
     else:
-        tree.add(f"[green]Installed Stop hook[/green] ({paths})")
+        tree.add(f"[green]Installed {event} hook[/green] ({paths})")
 
 
-def _is_devlog_stop_entry(entry: dict[str, Any]) -> bool:
-    """Detect a Stop entry installed by devlog by matching the script path
+def _is_devlog_hook_entry(entry: dict[str, Any], script_rel: str) -> bool:
+    """Detect a hook entry installed by devlog by matching the script path
     in any of its commands."""
     for h in entry.get("hooks", []):
-        if h.get("type") == "command" and STOP_HOOK_SCRIPT_REL in h.get("command", ""):
+        if h.get("type") == "command" and script_rel in h.get("command", ""):
             return True
     return False
 
 
-def _uninstall_claude_stop_hook(project_root: Path, hook_record: dict[str, Any]) -> list[str]:
-    """Remove a previously-installed Stop hook. Returns a list of human-readable
+def _uninstall_claude_hook(project_root: Path, hook_record: dict[str, Any]) -> list[str]:
+    """Remove a previously-installed hook. Returns a list of human-readable
     actions taken (for display)."""
     actions: list[str] = []
+    event = hook_record.get("event", "Stop")
+    script_rel = hook_record.get("script_path", STOP_HOOK_SCRIPT_REL)
 
     settings_path = project_root / hook_record.get("settings_path", CLAUDE_SETTINGS_REL)
     if settings_path.exists():
@@ -799,13 +874,13 @@ def _uninstall_claude_stop_hook(project_root: Path, hook_record: dict[str, Any])
             settings = None
 
         if isinstance(settings, dict):
-            stop_entries = settings.get("hooks", {}).get("Stop", [])
-            before = len(stop_entries)
-            stop_entries[:] = [e for e in stop_entries if not _is_devlog_stop_entry(e)]
-            if len(stop_entries) < before:
+            event_entries = settings.get("hooks", {}).get(event, [])
+            before = len(event_entries)
+            event_entries[:] = [e for e in event_entries if not _is_devlog_hook_entry(e, script_rel)]
+            if len(event_entries) < before:
                 # Clean up empty containers so settings.json stays tidy.
-                if not stop_entries:
-                    settings["hooks"].pop("Stop", None)
+                if not event_entries:
+                    settings["hooks"].pop(event, None)
                 if not settings.get("hooks"):
                     settings.pop("hooks", None)
 
@@ -814,7 +889,7 @@ def _uninstall_claude_stop_hook(project_root: Path, hook_record: dict[str, Any])
                         json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
                         encoding="utf-8",
                     )
-                    actions.append(f"Removed Stop hook from {hook_record['settings_path']}")
+                    actions.append(f"Removed {event} hook from {hook_record['settings_path']}")
                 else:
                     settings_path.unlink()
                     actions.append(f"Removed empty {hook_record['settings_path']}")
