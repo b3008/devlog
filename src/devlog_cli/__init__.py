@@ -280,7 +280,8 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
     tree = Tree(f"[bold green]Installing devlog convention (global)[/bold green] — {agent.name}")
 
     # Inject into ~/.claude/CLAUDE.md
-    ctx_path = home / agent.context_file
+    ctx_rel = f"{GLOBAL_CONTEXT_DIR_REL}/{agent.context_file}"
+    ctx_path = home / ctx_rel
     if ctx_path.exists():
         existing = ctx_path.read_text(encoding="utf-8")
         new_content = inject_convention(existing, convention_text)
@@ -289,8 +290,31 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
 
     ctx_path.parent.mkdir(parents=True, exist_ok=True)
     ctx_path.write_text(new_content, encoding="utf-8")
-    manifest.files[agent.context_file] = Manifest._sha256(new_content)
-    tree.add(f"[green]Injected convention into ~/{agent.context_file}[/green]")
+    manifest.files[ctx_rel] = Manifest._sha256(new_content)
+    tree.add(f"[green]Injected convention into ~/{ctx_rel}[/green]")
+
+    # Migrate away from the legacy global location (~/CLAUDE.md). Earlier
+    # versions wrote the convention there, where it loads via ancestor
+    # traversal rather than as true user memory — and double-injects once
+    # the new location exists.
+    legacy_path = home / agent.context_file
+    if legacy_path != ctx_path and legacy_path.exists():
+        try:
+            legacy_content = legacy_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            legacy_content = None
+        if legacy_content and _SENTINEL_START_MARKER in legacy_content:
+            cleaned = remove_convention(legacy_content)
+            if cleaned.strip():
+                legacy_path.write_text(cleaned, encoding="utf-8")
+                tree.add(
+                    f"[yellow]Migrated: removed convention from legacy ~/{agent.context_file}[/yellow]"
+                )
+            else:
+                legacy_path.unlink()
+                tree.add(
+                    f"[yellow]Migrated: removed legacy ~/{agent.context_file} (was devlog-only)[/yellow]"
+                )
 
     # Install Claude Code slash commands globally (default-on for claude installs).
     if agent.key == "claude":
@@ -373,24 +397,19 @@ def uninstall(
 
     manifest = Manifest.load(manifest_path, root_dir)
 
-    # Remove convention from context file
-    ctx_path = root_dir / agent.context_file
-    if ctx_path.exists():
-        content = ctx_path.read_text(encoding="utf-8")
-        if _SENTINEL_START_MARKER in content:
-            new_content = remove_convention(content)
-            if new_content.strip():
-                ctx_path.write_text(new_content, encoding="utf-8")
-                console.print(f"[green]Removed convention from {ctx_display_prefix}{agent.context_file}[/green]")
-            else:
-                ctx_path.unlink()
-                console.print(
-                    f"[green]Removed {ctx_display_prefix}{agent.context_file} (was empty after removal)[/green]"
-                )
-        else:
-            console.print(f"[yellow]No devlog section found in {ctx_display_prefix}{agent.context_file}[/yellow]")
-    else:
-        console.print(f"[yellow]{ctx_display_prefix}{agent.context_file} not found[/yellow]")
+    # Remove convention from context file. Global installs live under
+    # ~/.claude/; also sweep the legacy home-root location from old versions.
+    primary_rel = (
+        f"{GLOBAL_CONTEXT_DIR_REL}/{agent.context_file}" if global_ else agent.context_file
+    )
+    _remove_convention_from(root_dir / primary_rel, f"{ctx_display_prefix}{primary_rel}")
+    if global_:
+        # Sweep the legacy home-root location from old versions too.
+        _remove_convention_from(
+            root_dir / agent.context_file,
+            f"{ctx_display_prefix}{agent.context_file}",
+            quiet_if_absent=True,
+        )
 
     # Remove any installed hooks recorded in the manifest
     if manifest is not None:
@@ -547,9 +566,38 @@ def _templates_dir() -> Path:
     return Path(__file__).parent / "templates"
 
 
+def _remove_convention_from(ctx_path: Path, display: str, *, quiet_if_absent: bool = False) -> None:
+    """Strip the devlog sentinel block from a context file, deleting the file
+    if nothing else remains. quiet_if_absent suppresses noise when sweeping
+    locations that legitimately may not exist (e.g. legacy paths)."""
+    if not ctx_path.exists():
+        if not quiet_if_absent:
+            console.print(f"[yellow]{display} not found[/yellow]")
+        return
+    try:
+        content = ctx_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        console.print(f"[yellow]Could not read {display}; left untouched[/yellow]")
+        return
+    if _SENTINEL_START_MARKER not in content:
+        if not quiet_if_absent:
+            console.print(f"[yellow]No devlog section found in {display}[/yellow]")
+        return
+    new_content = remove_convention(content)
+    if new_content.strip():
+        ctx_path.write_text(new_content, encoding="utf-8")
+        console.print(f"[green]Removed convention from {display}[/green]")
+    else:
+        ctx_path.unlink()
+        console.print(f"[green]Removed {display} (was empty after removal)[/green]")
+
+
 # ── Claude Code Stop hook helpers ────────────────────────────────────────
 
 CLAUDE_SETTINGS_REL = ".claude/settings.json"
+# Global installs write the convention under ~/.claude/ (Claude Code's user
+# memory), not the home directory root (which only loads via ancestor traversal).
+GLOBAL_CONTEXT_DIR_REL = ".claude"
 STOP_HOOK_SCRIPT_REL = ".devlog/hooks/stop.py"
 STOP_HOOK_COMMAND_LOCAL = f'python3 "$CLAUDE_PROJECT_DIR/{STOP_HOOK_SCRIPT_REL}"'
 STOP_HOOK_COMMAND_GLOBAL = f'python3 "$HOME/{STOP_HOOK_SCRIPT_REL}"'

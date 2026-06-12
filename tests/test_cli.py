@@ -394,7 +394,7 @@ class TestGlobalInstall:
         monkeypatch.setattr(Path, "home", lambda: project_dir)
         result = runner.invoke(app, ["install", "--ai", "claude", "--global"])
         assert result.exit_code == 0
-        claude_md = project_dir / "CLAUDE.md"
+        claude_md = project_dir / ".claude" / "CLAUDE.md"
         assert claude_md.exists()
         content = claude_md.read_text()
         assert _SENTINEL_START_MARKER in content
@@ -403,9 +403,36 @@ class TestGlobalInstall:
     def test_includes_bootstrap_section(self, project_dir: Path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: project_dir)
         runner.invoke(app, ["install", "--ai", "claude", "--global"])
-        content = (project_dir / "CLAUDE.md").read_text()
+        content = (project_dir / ".claude" / "CLAUDE.md").read_text()
         assert "First-time setup" in content
         assert ".devlog/config.yaml" in content
+
+    def test_migrates_legacy_home_root_location(self, project_dir: Path, monkeypatch):
+        """Old versions injected into ~/CLAUDE.md; reinstall must move the
+        convention to ~/.claude/CLAUDE.md and clean the legacy copy."""
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        legacy = project_dir / "CLAUDE.md"
+        legacy.write_text(
+            "<!-- DEVLOG:START - old install -->\nold convention\n<!-- DEVLOG:END -->\n",
+            encoding="utf-8",
+        )
+        result = runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        assert result.exit_code == 0
+        assert (project_dir / ".claude" / "CLAUDE.md").exists()
+        # Legacy file was devlog-only, so it should be gone entirely.
+        assert not legacy.exists()
+
+    def test_migration_preserves_legacy_non_devlog_content(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        legacy = project_dir / "CLAUDE.md"
+        legacy.write_text(
+            "# My global rules\n\n<!-- DEVLOG:START - old -->\nold\n<!-- DEVLOG:END -->\n",
+            encoding="utf-8",
+        )
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        content = legacy.read_text(encoding="utf-8")
+        assert "# My global rules" in content
+        assert _SENTINEL_START_MARKER not in content
 
     def test_with_hook_global(self, project_dir: Path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: project_dir)
@@ -428,7 +455,8 @@ class TestGlobalInstall:
 
     def test_preserves_existing_global_content(self, project_dir: Path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: project_dir)
-        claude_md = project_dir / "CLAUDE.md"
+        claude_md = project_dir / ".claude" / "CLAUDE.md"
+        claude_md.parent.mkdir(parents=True)
         claude_md.write_text("# My global rules\n")
         runner.invoke(app, ["install", "--ai", "claude", "--global"])
         content = claude_md.read_text()
@@ -442,8 +470,19 @@ class TestGlobalUninstall:
         runner.invoke(app, ["install", "--ai", "claude", "--global"])
         result = runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
         assert result.exit_code == 0
-        # CLAUDE.md was devlog-only, so file should be removed
-        assert not (project_dir / "CLAUDE.md").exists()
+        # ~/.claude/CLAUDE.md was devlog-only, so file should be removed
+        assert not (project_dir / ".claude" / "CLAUDE.md").exists()
+
+    def test_uninstall_sweeps_legacy_location(self, project_dir: Path, monkeypatch):
+        monkeypatch.setattr(Path, "home", lambda: project_dir)
+        runner.invoke(app, ["install", "--ai", "claude", "--global"])
+        # Simulate a stale legacy copy left behind by an old version.
+        legacy = project_dir / "CLAUDE.md"
+        legacy.write_text(
+            "<!-- DEVLOG:START - old -->\nold\n<!-- DEVLOG:END -->\n", encoding="utf-8"
+        )
+        runner.invoke(app, ["uninstall", "--ai", "claude", "--global"])
+        assert not legacy.exists()
 
     def test_removes_global_hook(self, project_dir: Path, monkeypatch):
         monkeypatch.setattr(Path, "home", lambda: project_dir)
