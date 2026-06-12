@@ -13,12 +13,29 @@ from typing import Any
 
 import yaml
 
-SENTINEL_START = "<!-- DEVLOG:START - Do not edit manually. Remove with: devlog uninstall --ai <key> -->"
+from devlog_cli._version import __version__
+
+# The start sentinel carries the version that wrote the block, so staleness is
+# visible to anyone reading the file. Backward compatible: matching uses the
+# prefix marker below, and removal tolerates anything before the closing -->.
+SENTINEL_START = (
+    f"<!-- DEVLOG:START v{__version__} - Do not edit manually. "
+    "Remove with: devlog uninstall --ai <key> -->"
+)
 SENTINEL_END = "<!-- DEVLOG:END -->"
 
 # Stable substrings for matching — immune to sentinel wording changes.
 _SENTINEL_START_MARKER = "<!-- DEVLOG:START"
 _SENTINEL_END_MARKER = "<!-- DEVLOG:END"
+
+_SENTINEL_VERSION_RE = re.compile(r"<!-- DEVLOG:START v([0-9A-Za-z.\-+]+)")
+
+
+def sentinel_version(content: str) -> str | None:
+    """Extract the version stamp from a devlog sentinel block, if present.
+    Pre-0.2.0 blocks carry no stamp and return None."""
+    m = _SENTINEL_VERSION_RE.search(content)
+    return m.group(1) if m else None
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "blog_dir": "blog",
