@@ -22,8 +22,10 @@ def _run_hook(payload: dict) -> tuple[int, str]:
 
 class TestStopHook:
     def test_first_stop_blocks(self):
+        # Structured channel: exit 0 + {"decision": "block"} JSON. Exit 2
+        # would also block, but renders as a red "Stop hook error" box.
         code, stdout = _run_hook({"stop_hook_active": False, "session_id": "test"})
-        assert code == 2
+        assert code == 0
         output = json.loads(stdout)
         assert output["decision"] == "block"
         assert "devlog" in output["reason"]

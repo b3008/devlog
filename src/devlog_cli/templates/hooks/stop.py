@@ -8,6 +8,11 @@ false), it blocks the stop once and injects a reminder to check whether
 the turn warrants a development blog entry. On the agent's next stop
 attempt, stop_hook_active is true and the hook exits cleanly.
 
+Blocking uses Claude Code's structured channel: {"decision": "block"}
+JSON on stdout with exit code 0. Exit code 2 also blocks, but renders
+as a red "Stop hook error" in the UI — wrong for a deliberate,
+designed-in reminder.
+
 This is a deterministic, single-shot reminder. It does not inspect the
 transcript or guess whether work happened — that judgment is left to the
 agent, informed by the convention text in CLAUDE.md.
@@ -36,7 +41,7 @@ def main() -> None:
         sys.exit(0)
 
     json.dump({"decision": "block", "reason": REMINDER}, sys.stdout)
-    sys.exit(2)
+    sys.exit(0)
 
 
 if __name__ == "__main__":
