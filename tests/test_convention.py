@@ -100,6 +100,20 @@ class TestGenerateConvention:
         text = generate_convention(DEFAULT_CONFIG)
         assert ".devlog/learned.md" in text
 
+    def test_supersession_rule(self):
+        text = generate_convention(DEFAULT_CONFIG)
+        assert "supersedes" in text
+        assert "> **Update YYYY-MM-DD**" in text
+
+    def test_commit_entry_rule(self):
+        text = generate_convention(DEFAULT_CONFIG)
+        assert "Commit the entry" in text
+
+    def test_media_defaults_are_agent_feasible(self):
+        text = generate_convention(DEFAULT_CONFIG)
+        assert "Mermaid" in text
+        assert "screenshots and visuals are critical" not in text
+
     def test_custom_tags_rendered(self):
         config = dict(DEFAULT_CONFIG)
         config["tags"] = ["alpha", "beta"]

@@ -69,10 +69,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "media": {
         "enabled": True,
         "instructions": [
-            "Take screenshots of CLI output, generated files, or workflow artifacts",
-            "Save media to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename)",
-            "Reference in markdown as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`",
-            "If screenshots aren't feasible, add a `<!-- TODO: screenshot -->` placeholder",
+            "Prefer artifacts you can produce from the terminal: fenced CLI output, key diffs, or Mermaid diagrams embedded directly in the entry",
+            "When the user provides screenshots or images, save them to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename) and reference them as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`",
+            "If a visual would genuinely help but can't be produced, add a `<!-- TODO: screenshot -->` placeholder rather than skipping it silently",
         ],
     },
 }
@@ -243,10 +242,14 @@ When durable project knowledge emerges during the session \u2014 a new domain te
 4. Structure the body with these sections (skip any that don't apply):
 {sections_block}
 
-5. **Capture rich media** \u2014 screenshots and visuals are critical for portfolio impact:
+5. **Capture supporting artifacts** \u2014 concrete evidence makes entries credible and portfolio-ready:
 {media_block}
 
 6. Update `{blog_dir}/{config.get("index_file", "_index.md")}` \u2014 add the new entry to the list at the top.
+
+7. If the entry corrects or supersedes a claim made in an earlier entry, annotate the superseded entry **in the same turn**: add a dated blockquote (`> **Update YYYY-MM-DD**: \u2026`) under the affected claim, linking to the new entry. Unmarked stale claims compound \u2014 future sessions act on them at face value.
+
+8. Commit the entry (plus any `learned.md` and index updates) together with the session's work. An uncommitted entry is invisible to other sessions, worktrees, and collaborators.
 
 ### Voice and audience
 

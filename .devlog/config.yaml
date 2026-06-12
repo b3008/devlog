@@ -62,11 +62,10 @@ frontmatter:
   - field: summary
     example: '"One-sentence summary of what was accomplished and why it matters."'
 
-# Media/screenshot configuration
+# Supporting-artifact configuration (agent-feasible evidence, not just screenshots)
 media:
   enabled: true
   instructions:
-    - "Take screenshots of CLI output, generated files, or workflow artifacts"
-    - "Save media to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename)"
-    - "Reference in markdown as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`"
-    - "If screenshots aren't feasible, add a `<!-- TODO: screenshot -->` placeholder"
+    - "Prefer artifacts you can produce from the terminal: fenced CLI output, key diffs, or Mermaid diagrams embedded directly in the entry"
+    - "When the user provides screenshots or images, save them to `{media_dir}/YYYY-MM-DD-NN-slug/` (matching the entry filename) and reference them as `![Alt text](media/YYYY-MM-DD-NN-slug/filename.png)`"
+    - "If a visual would genuinely help but can't be produced, add a `<!-- TODO: screenshot -->` placeholder rather than skipping it silently"
