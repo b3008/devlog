@@ -18,12 +18,9 @@ import json
 import sys
 
 REMINDER = (
-    "devlog reminder: before ending this turn, check whether anything in "
-    "this session hit a trigger from CLAUDE.md's 'When to write an entry' "
-    "list \u2014 including architectural or scope decisions reached without "
-    "code changes. If yes, write or update the blog entry in blog/ now, "
-    "then end the turn. If nothing in this turn qualifies, just stop again "
-    "and this hook will let you through."
+    "devlog: check this turn against CLAUDE.md's 'When to write an entry' "
+    "triggers \u2014 decisions count, not only code. If any apply, write or "
+    "update the entry in blog/ before stopping. Otherwise stop again to pass."
 )
 
 

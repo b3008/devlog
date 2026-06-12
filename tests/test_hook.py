@@ -26,7 +26,7 @@ class TestStopHook:
         assert code == 2
         output = json.loads(stdout)
         assert output["decision"] == "block"
-        assert "devlog reminder" in output["reason"]
+        assert "devlog" in output["reason"]
         assert "trigger" in output["reason"]
 
     def test_second_stop_allows(self):
