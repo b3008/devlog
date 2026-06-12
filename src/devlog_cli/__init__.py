@@ -626,24 +626,27 @@ def _read_session_log(
     last_ts: str | None = None
     since_entry = 0
     try:
-        lines = sessions_path.read_text(encoding="utf-8").splitlines()
+        # Stream rather than read_text(): the log grows one line per session
+        # for the life of the project.
+        with sessions_path.open(encoding="utf-8") as fh:
+            for raw in fh:
+                line = raw.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                total += 1
+                ts = str(rec.get("ts") or "")
+                if ts and (last_ts is None or ts > last_ts):
+                    last_ts = ts
+                if latest_entry and ts[:10] > latest_entry:
+                    since_entry += 1
     except (OSError, UnicodeDecodeError):
         return 0, None, 0
-    for line in lines:
-        if not line.strip():
-            continue
-        try:
-            rec = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(rec, dict):
-            continue
-        total += 1
-        ts = str(rec.get("ts") or "")
-        if ts and (last_ts is None or ts > last_ts):
-            last_ts = ts
-        if latest_entry and ts[:10] > latest_entry:
-            since_entry += 1
     return total, (last_ts[:10] if last_ts else None), since_entry
 
 
@@ -751,6 +754,14 @@ def _install_claude_hook(
             record_hash = current_hash
         # current_hash is None → unreadable; fall through and overwrite from
         # the template rather than aborting the install.
+    # When the previous record carries no sha256 (pre-hashing manifests) we
+    # deliberately overwrite on reinstall: an old template and a user edit are
+    # indistinguishable, and preserving-when-unsure would permanently pin
+    # stale scripts (e.g. the pre-exit-0 Stop hook) on every legacy install.
+    # One reinstall migrates the manifest to hashed records; edits made after
+    # that are detected and preserved. Uninstall makes the opposite call —
+    # see _uninstall_claude_hook — because deletion is unrecoverable while
+    # overwriting-from-template at least leaves a working hook.
     if not preserved:
         shutil.copy2(src, script_dst)
         script_dst.chmod(0o755)
@@ -896,17 +907,21 @@ def _uninstall_claude_hook(project_root: Path, hook_record: dict[str, Any]) -> l
 
     script_path = project_root / hook_record.get("script_path", STOP_HOOK_SCRIPT_REL)
     if script_path.exists():
-        recorded_hash = hook_record.get("sha256")
-        if recorded_hash:
-            current_hash = _safe_file_hash(script_path)
-            if current_hash is None or current_hash != recorded_hash:
-                # Script diverged from the manifest (or can't be read to
-                # confirm) — user edits; don't risk deleting them.
-                actions.append(
-                    f"Preserved customized hook script {hook_record['script_path']} "
-                    f"(local edits detected, file kept)"
-                )
-                return actions
+        # Only delete a script we can positively identify as devlog's: it must
+        # match the recorded install hash, or — for pre-hashing manifests that
+        # recorded none — the currently shipped template. Anything else may
+        # carry user edits; an unregistered leftover script is inert, a deleted
+        # customization is unrecoverable.
+        reference_hash = hook_record.get("sha256") or _safe_file_hash(
+            _templates_dir() / "hooks" / script_path.name
+        )
+        current_hash = _safe_file_hash(script_path)
+        if reference_hash is None or current_hash is None or current_hash != reference_hash:
+            actions.append(
+                f"Preserved hook script {hook_record['script_path']} "
+                f"(could not confirm it is unmodified; file kept)"
+            )
+            return actions
         script_path.unlink()
         # Drop empty parent dirs (hooks/, then .devlog/ only if empty).
         parent = script_path.parent

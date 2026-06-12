@@ -452,6 +452,41 @@ class TestUninstall:
         assert script.exists()
         assert script.read_text(encoding="utf-8") == "# my custom hook\n"
 
+    def test_uninstall_preserves_unverifiable_script_from_old_manifest(
+        self, initialized_project: Path
+    ):
+        """Pre-sha256 manifests can't prove a modified script is devlog's;
+        uninstall must keep it rather than risk deleting user edits."""
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for h in data["hooks"]:
+            h.pop("sha256", None)
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        script.write_text("# customized before hashes existed\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["uninstall", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert script.exists()
+        assert script.read_text(encoding="utf-8") == "# customized before hashes existed\n"
+
+    def test_uninstall_removes_pristine_script_from_old_manifest(
+        self, initialized_project: Path
+    ):
+        """A hash-less record whose script still matches the shipped template
+        is positively devlog's — uninstall removes it."""
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for h in data["hooks"]:
+            h.pop("sha256", None)
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["uninstall", "--ai", "claude"])
+        assert result.exit_code == 0
+        assert not (initialized_project / ".devlog" / "hooks" / "stop.py").exists()
+
     def test_hook_removal_preserves_settings(self, initialized_project: Path):
         settings_dir = initialized_project / ".claude"
         settings_dir.mkdir()
