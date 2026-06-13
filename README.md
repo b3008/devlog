@@ -30,6 +30,8 @@ grows automatically, in the agent's own voice.
 
 ## Table of contents
 
+- [Why devlog?](#why-devlog)
+- [What you get](#what-you-get)
 - [Quickstart](#quickstart)
 - [What actually happens](#what-actually-happens)
 - [Commands](#commands)
@@ -40,6 +42,82 @@ grows automatically, in the agent's own voice.
 - [Configuration](#configuration)
 - [Uninstalling](#uninstalling)
 - [License](#license)
+
+<br>
+
+## Why devlog?
+
+A codebase is the *what*. The *why* — the dead ends, the constraint that ruled
+out the obvious design, the reason a function looks wrong but isn't — lives
+somewhere far more fragile. With an AI agent it lives in a chat transcript
+you'll close and never reopen. The commit captures the change, never the
+reasoning behind it. Six months later that reasoning is simply gone, and the
+next person — or the next agent — re-derives it from scratch or breaks it by
+accident.
+
+devlog's real output isn't a blog. It's a durable, git-versioned,
+**cross-agent record of why the code is the way it is** — written down at the
+moment the reasoning is fresh, by the agent that did the reasoning. The
+portfolio-ready blog is just the human-facing rendering of that record.
+
+The premise holds *harder* for agent-written code than for hand-written code:
+
+- **The reasoning never lived in your head.** You didn't write the code — the
+  agent did. The thinking is in a transcript you're about to discard, not in
+  your memory.
+- **Commits carry the *what*, never the *why*.** Reconstructing intent from git
+  metadata after the fact is lossy by design — and capped by how good the
+  commit message was.
+- **Native agent memory can't hold this.** It's private, unversioned, and
+  harness-bound — locked to one vendor's tool. It doesn't travel with the repo,
+  survive a switch from one agent to another, or open up to a collaborator.
+
+A dev log usually dies for one reason: the human is the write-trigger, and
+discipline lapses. devlog moves the trigger to the agent that's already in the
+loop where the work happens — so the record gets written because the work got
+done, not because someone remembered to journal.
+
+Capture is best-effort: the agent follows the convention because it's in its
+context — *polite*, not guaranteed. For Claude Code, an optional `Stop` hook
+makes it far more reliable by nudging the agent before it ends a turn, and
+`devlog status` reports when sessions ended without producing an entry — so the
+blind spot is at least visible.
+
+<br>
+
+## What you get
+
+A `blog/` directory that fills itself in as the agent works — and, underneath
+it, a project memory that outlives any single session, agent, or vendor.
+
+- **A "why" record that survives.** Decisions, tradeoffs, and dead ends get
+  captured in git, in the agent's own voice, as they happen — not reconstructed
+  post-hoc from commit messages.
+- **Institutional memory across sessions and agents.** `.devlog/learned.md`
+  accumulates the project's vocabulary, recurring themes, and open threads;
+  `/devlog-catchup` reloads the project arc, recent work, and glossary at the
+  start of a session. Any agent inherits the context — not just the one that
+  wrote it.
+- **Onboarding for humans and agents alike.** A new collaborator, or the next
+  agent to touch the repo, reads the narrative instead of re-deriving the
+  reasoning by hand.
+- **Durable and versioned.** It lives in git and travels with the repo,
+  surviving across agents and harness changes — no vendor, no private store, no
+  lock-in.
+- **A portfolio-ready record as a byproduct.** Time-ordered, narrative, written
+  for whoever evaluates the work next — collaborators, employers, researchers.
+- **Self-maintaining.** The tag vocabulary self-updates, the convention can
+  re-tailor its config to the project's domain, and `/devlog-manicure` audits
+  and prunes stale entries so the record stays trustworthy.
+
+How it compares:
+
+| Approach | What it produces | The catch |
+| --- | --- | --- |
+| **devlog** | Narrative *why*, written as the work happens | Best-effort capture (firmer with the hook) |
+| Commit-driven journals | Narrative reconstructed from git after the fact | Lossy; quality capped by commit messages |
+| Changelog generators | Structured release notes for upgraders | Not narrative; wrong audience |
+| Manual markdown diaries | Exactly the right narrative | You have to remember to write it — and won't |
 
 <br>
 
