@@ -71,10 +71,3 @@ reusable insight, not diff size.
   a one-character regenerate (`-f ansi_shadow "devlog"`).
 - A commit-graph accent line (`●─●─●─●─`) under the wordmark would nod at the
   time-ordered-log concept; deferred as a nice-to-have, not shipped.
-
-> **Update 2026-06-14**: this swap only touched the README; the CLI kept
-> printing the old half-block art (the `LOGO` constant in `__init__.py`, shown by
-> `devlog version`/`upgrade`), which surfaced as a drift thread while shipping
-> [`devlog upgrade`](2026-06-14-01-devlog-upgrade-command.md). Now unified — the
-> CLI prints the same ANSI Shadow wordmark (6 rows, so taller terminal output;
-> no test pinned the art). Both surfaces match.
