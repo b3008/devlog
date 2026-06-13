@@ -24,6 +24,8 @@ The eleven findings, compressed:
 10. **The blog can silently never ship.** Observed: the 05-31 entry sat uncommitted for six weeks on a side branch. The convention never says "commit the entry with the work"; nothing publishes HTML/RSS.
 11. **"27 agents" is 1 + 26 passive.** Only Claude Code gets enforcement and commands; the rest get static AGENTS.md text. Several of those ecosystems now have command mechanisms worth porting to.
 
+> **Update 2026-06-13**: After the [README audit](2026-06-13-02-readme-audit-against-assessment.md), F11 is the *only* README-touching finding still open — F4–F7 and the hook findings all landed in the README via the 06-12 work. The depth-of-support gap remains unstated in the README (an accepted positioning call, deferred to the user); the port-commands-to-other-agents half remains roadmap.
+
 ## Why it matters
 
 The assessment's core judgment: the premise is *more* right for agent-coded codebases than for human ones — the reasoning lives in discarded transcripts, the human didn't write the code, and commits only carry the *what* — but the current design assumes one human, one agent, serial sessions. Agent-coded repos are parallel, high-velocity, and partially headless. Capture is polite rather than reliable; consumption doesn't scale; concurrency breaks the index. None of these are fatal, and the strongest fixes are small.
