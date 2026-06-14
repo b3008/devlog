@@ -13,10 +13,13 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import shutil
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 import typer
 from rich.console import Console
@@ -41,9 +44,12 @@ from devlog_cli.convention import (
 from devlog_cli.manifest import Manifest
 
 LOGO = """\
-[bold cyan]  ██▀▄ █▀▀ █ █ █   ▄▀▄ ▄▀▀[/]
-[bold cyan]  █  █ █▀  ▀▄▀ █   █ █ █ █[/]
-[bold cyan]  ▀▀   ▀▀▀  ▀  ▀▀▀  ▀  ▀▀▀[/]"""
+[bold cyan]  ██████╗ ███████╗██╗   ██╗██╗      ██████╗  ██████╗[/]
+[bold cyan]  ██╔══██╗██╔════╝██║   ██║██║     ██╔═══██╗██╔════╝[/]
+[bold cyan]  ██║  ██║█████╗  ██║   ██║██║     ██║   ██║██║  ███╗[/]
+[bold cyan]  ██║  ██║██╔══╝  ╚██╗ ██╔╝██║     ██║   ██║██║   ██║[/]
+[bold cyan]  ██████╔╝███████╗ ╚████╔╝ ███████╗╚██████╔╝╚██████╔╝[/]
+[bold cyan]  ╚═════╝ ╚══════╝  ╚═══╝  ╚══════╝ ╚═════╝  ╚═════╝[/]"""
 
 app = typer.Typer(
     name="devlog",
@@ -113,6 +119,15 @@ def init(
         tree.add("[green]Created .devlog/learned.md[/green]")
     else:
         tree.add("[dim].devlog/learned.md already exists[/dim]")
+
+    # .devlog/.gitignore — keep the runtime session log out of version control
+    created = _ensure_devlog_gitignore(devlog_dir)
+    if created:
+        tree.add("[green]Created .devlog/.gitignore[/green]")
+    elif (devlog_dir / ".gitignore").exists():
+        tree.add("[dim].devlog/.gitignore already exists[/dim]")
+    else:
+        tree.add("[red]Failed to create .devlog/.gitignore[/red]")
 
     console.print()
     console.print(tree)
@@ -192,6 +207,16 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
     learned_path = project_root / ".devlog" / "learned.md"
     if not learned_path.exists():
         shutil.copy2(_templates_dir() / "learned.md", learned_path)
+
+    # Ensure .devlog/.gitignore exists (covers projects initialized before it
+    # shipped — e.g. installing --with-hook into an older devlog repo).
+    devlog_dir = project_root / ".devlog"
+    _ensure_devlog_gitignore(devlog_dir)
+    if not (devlog_dir / ".gitignore").exists():
+        console.print(
+            "[yellow]Warning: could not create .devlog/.gitignore; "
+            "sessions.jsonl may appear as untracked.[/yellow]"
+        )
 
     # Fold tags discovered in existing entries into the rendered vocabulary
     base_tags = set(config["tags"])
@@ -661,12 +686,272 @@ def version() -> None:
     console.print()
 
 
+# ── Upgrade command ──────────────────────────────────────────────────────
+
+_REPO_URL = "https://github.com/b3008/devlog.git"
+
+
+class _InstallMethod(NamedTuple):
+    kind: str  # uv-tool | pipx | pip | source | uvx | unknown
+    display: str  # human label
+    upgrade_cmd: Optional[list[str]]  # how to upgrade the tool, or None
+    self_upgradeable: bool
+
+
+def _detect_install_method() -> _InstallMethod:
+    """Best-effort guess at how the running devlog was installed, and the
+    command that upgrades it. Heuristic, based on where the package lives."""
+    pkg = str(Path(__file__).resolve()).replace("\\", "/")
+
+    # Editable / source checkout: the package sits under a `src/` tree beside a
+    # pyproject.toml. An editable `pip install -e .` lands here too — same fix:
+    # pull the source, not a package manager.
+    repo_root = Path(__file__).resolve().parents[2]
+    if (repo_root / "pyproject.toml").exists() and (repo_root / "src" / "devlog_cli").is_dir():
+        return _InstallMethod("source", "a source checkout", None, False)
+
+    # A uv-tool path also contains "site-packages", so check it before pip.
+    if "/uv/tools/" in pkg:
+        return _InstallMethod("uv-tool", "uv tool", ["uv", "tool", "upgrade", "devlog"], True)
+    if "/pipx/" in pkg:
+        return _InstallMethod("pipx", "pipx", ["pipx", "upgrade", "devlog"], True)
+    # Ephemeral `uvx` runs from the uv cache — nothing persistent to upgrade.
+    if "/.cache/uv/" in pkg or "/archive-v" in pkg or "/uv/cache/" in pkg:
+        return _InstallMethod("uvx", "an ephemeral uvx run", None, False)
+    if "site-packages" in pkg or "dist-packages" in pkg:
+        return _InstallMethod(
+            "pip",
+            "pip",
+            [sys.executable, "-m", "pip", "install", "--upgrade", "--force-reinstall", f"git+{_REPO_URL}"],
+            True,
+        )
+    return _InstallMethod("unknown", "an unrecognized install", None, False)
+
+
+def _manual_tool_cmd(method: _InstallMethod) -> str:
+    """The command to run by hand when self-upgrade isn't possible."""
+    if method.kind == "source":
+        return "git pull   # in your devlog source checkout"
+    return f"uv tool upgrade devlog   (or: uv tool install --force git+{_REPO_URL})"
+
+
+def _devlog_exe() -> list[str]:
+    """Command prefix that invokes the (freshly upgraded) devlog binary."""
+    found = shutil.which("devlog")
+    if found:
+        return [found]
+    return [sys.executable, "-m", "devlog_cli"]
+
+
+def _query_version(exe: list[str]) -> Optional[str]:
+    """Ask a devlog binary for its version string."""
+    try:
+        out = subprocess.run(exe + ["version"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r"devlog\s+(\d[\w.+-]*)", out.stdout)
+    return match.group(1) if match else None
+
+
+def _run_tool_upgrade(cmd: list[str]) -> int:
+    """Run the tool-upgrade command, streaming its output. Returns the exit
+    code (127 if the package manager isn't on PATH)."""
+    try:
+        return subprocess.run(cmd).returncode
+    except FileNotFoundError:
+        console.print(f"[red]Command not found: {cmd[0]}[/red]")
+        return 127
+
+
+def _run_resync(exe: list[str], agent_key: str, *, global_mode: bool) -> int:
+    """Resync one agent by invoking `devlog install` on the upgraded binary."""
+    args = exe + ["install", "--ai", agent_key]
+    if global_mode:
+        args.append("--global")
+    try:
+        return subprocess.run(args).returncode
+    except FileNotFoundError:
+        console.print(f"[red]Could not find the devlog binary to resync ({exe[0]}).[/red]")
+        return 127
+
+
+def _installed_project_agents(project_root: Path) -> list[str]:
+    """Agent keys with a per-project manifest in this repo."""
+    manifests = project_root / ".devlog" / "manifests"
+    if not manifests.is_dir():
+        return []
+    keys: list[str] = []
+    for mf in sorted(manifests.glob("*.manifest.json")):
+        m = Manifest.load(mf, project_root)
+        if m is not None:
+            keys.append(m.agent_key)
+    return keys
+
+
+@app.command()
+def upgrade(
+    check: bool = typer.Option(
+        False, "--check", help="Preview what upgrade would do; make no changes."
+    ),
+    project_only: bool = typer.Option(
+        False,
+        "--project-only",
+        help="Skip the tool upgrade; only resync this repo to the installed tool.",
+    ),
+    tool_only: bool = typer.Option(
+        False, "--tool-only", help="Only upgrade the devlog tool; skip resyncing this repo."
+    ),
+) -> None:
+    """Upgrade the devlog tool, then resync this repo's convention to it."""
+    if project_only and tool_only:
+        console.print("[red]--project-only and --tool-only are mutually exclusive.[/red]")
+        raise typer.Exit(1)
+
+    project_root = Path.cwd()
+    method = _detect_install_method()
+    project_agents = _installed_project_agents(project_root)
+    global_agent = "claude" if _global_install_detected(get_agent("claude")) else None
+
+    def targets_phrase() -> str:
+        parts = list(project_agents)
+        if global_agent:
+            parts.append(f"{global_agent} (global)")
+        return ", ".join(parts) if parts else "nothing"
+
+    def targets_count() -> int:
+        return len(project_agents) + (1 if global_agent else 0)
+
+    console.print(LOGO)
+    console.print(f"  devlog {__version__}  [dim]({method.display})[/dim]")
+    console.print()
+
+    # ── Preview ──
+    if check:
+        if not project_only:
+            if method.self_upgradeable and method.upgrade_cmd:
+                console.print(
+                    "[bold]↑ would upgrade tool:[/bold] [cyan]"
+                    + " ".join(method.upgrade_cmd)
+                    + "[/cyan]"
+                )
+            else:
+                console.print(
+                    f"[yellow]⚠ can't self-upgrade the binary ({method.display}); run it yourself:[/yellow]"
+                )
+                console.print(f"    [cyan]{_manual_tool_cmd(method)}[/cyan]")
+        if not tool_only:
+            console.print(f"[bold]↻ would resync:[/bold] {targets_phrase()}")
+        raise typer.Exit(0)
+
+    upgraded_from = __version__
+    upgraded_to: Optional[str] = None
+    did_tool = False
+
+    # ── Tool layer ──
+    if not project_only:
+        if not method.self_upgradeable or not method.upgrade_cmd:
+            console.print(
+                f"[yellow]⚠ running from {method.display} — can't self-upgrade the binary.[/yellow]"
+            )
+            console.print("  To upgrade the tool, run:")
+            console.print(f"    [cyan]{_manual_tool_cmd(method)}[/cyan]")
+            if not tool_only:
+                console.print("  then re-run: [cyan]devlog upgrade --project-only[/cyan]")
+            raise typer.Exit(0)
+
+        console.print("[bold]↑ upgrading tool[/bold]")
+        console.print(f"    [dim]{' '.join(method.upgrade_cmd)}[/dim]")
+        code = _run_tool_upgrade(method.upgrade_cmd)
+        if code != 0:
+            console.print(
+                f"[red]Tool upgrade failed (exit {code}).[/red] "
+                f"Try [cyan]{_manual_tool_cmd(method)}[/cyan]."
+            )
+            raise typer.Exit(code or 1)
+        did_tool = True
+        upgraded_to = _query_version(_devlog_exe())
+        if upgraded_to and upgraded_to != upgraded_from:
+            console.print(f"    [green]{upgraded_from} → {upgraded_to}  ✓[/green]")
+        elif upgraded_to == upgraded_from:
+            console.print(f"    [green]already on the latest ({upgraded_from})  ✓[/green]")
+        else:
+            console.print("    [green]done  ✓[/green]")
+        console.print()
+
+    if tool_only:
+        console.print("[green]✓ tool upgrade complete.[/green]")
+        raise typer.Exit(0)
+
+    # ── Project layer ──
+    if targets_count() == 0:
+        console.print(
+            "[yellow]No devlog install found in this repo to resync.[/yellow] "
+            "Run [cyan]devlog install --ai <agent>[/cyan] here first."
+        )
+        raise typer.Exit(0)
+
+    console.print(f"[bold]↻ resyncing with devlog {upgraded_to or upgraded_from}[/bold]")
+    console.print()
+    failures = 0
+    if did_tool:
+        # This process is still running the OLD code — resync through the
+        # freshly installed binary so the NEW templates are what get written.
+        exe = _devlog_exe()
+        for key in project_agents:
+            if _run_resync(exe, key, global_mode=False) != 0:
+                failures += 1
+        if global_agent and _run_resync(exe, global_agent, global_mode=True) != 0:
+            failures += 1
+    else:
+        # --project-only: this process already is the installed tool.
+        for key in project_agents:
+            _install_local(get_agent(key), with_hook=False)
+        if global_agent:
+            _install_global(get_agent(global_agent), with_hook=False)
+
+    console.print()
+    noun = "agent" if targets_count() == 1 else "agents"
+    if did_tool:
+        console.print(
+            f"[green]✓ upgraded {upgraded_from} → {upgraded_to or 'latest'}; "
+            f"{targets_count()} {noun} resynced[/green]"
+        )
+    else:
+        console.print(
+            f"[green]✓ repo in sync with devlog {upgraded_from}; "
+            f"{targets_count()} {noun} resynced[/green]"
+        )
+    if failures:
+        raise typer.Exit(1)
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
 def _templates_dir() -> Path:
     """Find the bundled templates directory."""
     return Path(__file__).parent / "templates"
+
+
+_DEVLOG_GITIGNORE = (
+    "# Runtime session-coverage log written by the SessionEnd hook —\n"
+    "# per-machine data, not source. `devlog status` reads it locally.\n"
+    "sessions.jsonl\n"
+)
+
+
+def _ensure_devlog_gitignore(devlog_dir: Path) -> bool:
+    """Write `.devlog/.gitignore` (ignoring the runtime session log) if it's
+    absent. Scoped to `.devlog/` so it never touches the user's root
+    `.gitignore`. Returns True when it creates the file."""
+    path = devlog_dir / ".gitignore"
+    if path.exists():
+        return False
+    try:
+        path.write_text(_DEVLOG_GITIGNORE, encoding="utf-8")
+    except OSError:
+        return False
+    return True
 
 
 def _read_session_log(
