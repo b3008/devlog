@@ -121,10 +121,13 @@ def init(
         tree.add("[dim].devlog/learned.md already exists[/dim]")
 
     # .devlog/.gitignore — keep the runtime session log out of version control
-    if _ensure_devlog_gitignore(devlog_dir):
+    created = _ensure_devlog_gitignore(devlog_dir)
+    if created:
         tree.add("[green]Created .devlog/.gitignore[/green]")
-    else:
+    elif (devlog_dir / ".gitignore").exists():
         tree.add("[dim].devlog/.gitignore already exists[/dim]")
+    else:
+        tree.add("[red]Failed to create .devlog/.gitignore[/red]")
 
     console.print()
     console.print(tree)
