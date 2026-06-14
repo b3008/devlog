@@ -73,18 +73,11 @@ manager.
   `__version__` dynamically, so nothing pinned broke.
 - **Global resync is included when a global install is detected** — leaving it
   stale after a tool bump would be inconsistent — but it's labelled clearly.
-- **Did not auto-resync this dogfood repo** (the resync is skippable, not
-  harmful).
-
-  > **Correction 2026-06-14**: my original reasoning here was wrong. I claimed
-  > resyncing would inject a *thin* pointer block "wrong for collaborators" —
-  > assuming the committed `CLAUDE.md` was a *full* block. It isn't: this repo's
-  > `CLAUDE.md` is *already* a thin block by design (the maintainer has a global
-  > install; collaborators are told to run `devlog install --ai claude --full`).
-  > Resyncing on this machine would regenerate the same thin block and only bump
-  > the stamp `v0.2.0 → v0.3.0` — a cosmetic diff, since the convention
-  > templates didn't change between 0.2.0 and 0.3.0. So it's safe to skip *or*
-  > to run; `devlog status` just flags the stamp drift until someone does.
+- **Did not auto-resync this dogfood repo.** Resyncing here would inject a *thin*
+  pointer block (my machine has a global install), which is wrong for the
+  committed `CLAUDE.md` that collaborators without the global install depend on.
+  The convention templates didn't change between 0.2.0 and 0.3.0 anyway — only
+  the version stamp drifts.
 
 ## Surprises
 
