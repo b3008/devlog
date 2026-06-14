@@ -1,0 +1,3 @@
+# Runtime session-coverage log written by the SessionEnd hook —
+# per-machine data, not source. `devlog status` reads it locally.
+sessions.jsonl

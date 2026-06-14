@@ -120,6 +120,12 @@ def init(
     else:
         tree.add("[dim].devlog/learned.md already exists[/dim]")
 
+    # .devlog/.gitignore — keep the runtime session log out of version control
+    if _ensure_devlog_gitignore(devlog_dir):
+        tree.add("[green]Created .devlog/.gitignore[/green]")
+    else:
+        tree.add("[dim].devlog/.gitignore already exists[/dim]")
+
     console.print()
     console.print(tree)
     console.print()
@@ -198,6 +204,10 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
     learned_path = project_root / ".devlog" / "learned.md"
     if not learned_path.exists():
         shutil.copy2(_templates_dir() / "learned.md", learned_path)
+
+    # Ensure .devlog/.gitignore exists (covers projects initialized before it
+    # shipped — e.g. installing --with-hook into an older devlog repo).
+    _ensure_devlog_gitignore(project_root / ".devlog")
 
     # Fold tags discovered in existing entries into the rendered vocabulary
     base_tags = set(config["tags"])
@@ -912,6 +922,27 @@ def upgrade(
 def _templates_dir() -> Path:
     """Find the bundled templates directory."""
     return Path(__file__).parent / "templates"
+
+
+_DEVLOG_GITIGNORE = (
+    "# Runtime session-coverage log written by the SessionEnd hook —\n"
+    "# per-machine data, not source. `devlog status` reads it locally.\n"
+    "sessions.jsonl\n"
+)
+
+
+def _ensure_devlog_gitignore(devlog_dir: Path) -> bool:
+    """Write `.devlog/.gitignore` (ignoring the runtime session log) if it's
+    absent. Scoped to `.devlog/` so it never touches the user's root
+    `.gitignore`. Returns True when it creates the file."""
+    path = devlog_dir / ".gitignore"
+    if path.exists():
+        return False
+    try:
+        path.write_text(_DEVLOG_GITIGNORE, encoding="utf-8")
+    except OSError:
+        return False
+    return True
 
 
 def _read_session_log(

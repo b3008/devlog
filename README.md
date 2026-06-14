@@ -377,8 +377,9 @@ your-project/
 ├── .devlog/
 │   ├── config.yaml              # stable convention settings
 │   ├── learned.md               # agent-maintained project notebook
+│   ├── .gitignore               # ignores the runtime session log
 │   ├── hooks/                   # Stop + SessionEnd scripts (--with-hook)
-│   ├── sessions.jsonl           # session coverage log (SessionEnd hook)
+│   ├── sessions.jsonl           # session coverage log (gitignored)
 │   └── manifests/
 │       └── claude.manifest.json # install tracking
 ├── .claude/

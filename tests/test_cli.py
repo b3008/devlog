@@ -21,6 +21,19 @@ class TestInit:
         assert (project_dir / "blog" / "_index.md").exists()
         assert (project_dir / "blog" / "media").is_dir()
 
+    def test_creates_devlog_gitignore(self, project_dir: Path):
+        runner.invoke(app, ["init"])
+        gitignore = project_dir / ".devlog" / ".gitignore"
+        assert gitignore.exists()
+        assert "sessions.jsonl" in gitignore.read_text()
+
+    def test_gitignore_preserves_user_edits(self, project_dir: Path):
+        runner.invoke(app, ["init"])
+        gitignore = project_dir / ".devlog" / ".gitignore"
+        gitignore.write_text("sessions.jsonl\nscratch/\n")
+        runner.invoke(app, ["init"])  # re-init must not clobber it
+        assert "scratch/" in gitignore.read_text()
+
     def test_index_has_project_name(self, project_dir: Path):
         runner.invoke(app, ["init", "--name", "My Project"])
         content = (project_dir / "blog" / "_index.md").read_text()
@@ -56,6 +69,14 @@ class TestInstall:
         runner.invoke(app, ["install", "--ai", "claude"])
         content = (installed_project / "CLAUDE.md").read_text()
         assert content.count(_SENTINEL_START_MARKER) == 1
+
+    def test_install_recreates_missing_gitignore(self, installed_project: Path):
+        # Covers a project initialized before .devlog/.gitignore shipped.
+        gitignore = installed_project / ".devlog" / ".gitignore"
+        gitignore.unlink()
+        runner.invoke(app, ["install", "--ai", "claude"])
+        assert gitignore.exists()
+        assert "sessions.jsonl" in gitignore.read_text()
 
     def test_auto_init(self, project_dir: Path):
         result = runner.invoke(app, ["install", "--ai", "claude"])
