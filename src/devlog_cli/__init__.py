@@ -213,7 +213,10 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
     devlog_dir = project_root / ".devlog"
     _ensure_devlog_gitignore(devlog_dir)
     if not (devlog_dir / ".gitignore").exists():
-        console.print("[yellow]Warning: could not create .devlog/.gitignore; sessions.jsonl may appear as untracked.[/yellow]")
+        console.print(
+            "[yellow]Warning: could not create .devlog/.gitignore; "
+            "sessions.jsonl may appear as untracked.[/yellow]"
+        )
 
     # Fold tags discovered in existing entries into the rendered vocabulary
     base_tags = set(config["tags"])
