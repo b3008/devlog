@@ -7,3 +7,7 @@ dist/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Runtime session-coverage log written by the devlog SessionEnd hook —
+# per-machine data, not source. `devlog status` reads it locally.
+.devlog/sessions.jsonl
