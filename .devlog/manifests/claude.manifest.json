@@ -1,9 +1,9 @@
 {
   "agent": "claude",
-  "version": "0.3.0",
-  "installed_at": "2026-06-14T06:15:10.466438+00:00",
+  "version": "0.4.0",
+  "installed_at": "2026-06-14T08:18:16.094924+00:00",
   "files": {
-    "CLAUDE.md": "938dd0467661435c8365412cb46ad823e7191a864bde2d9be9bd65978f9ccce7"
+    "CLAUDE.md": "c33bfea7e1c950a9836b6ddd789b057c34817e24f3488648c8ba5b25f2f97bfb"
   },
   "hooks": [
     {
@@ -31,6 +31,11 @@
       "name": "devlog-manicure",
       "path": ".claude/commands/devlog-manicure.md",
       "sha256": "0bbcde3fe751130ec8981c1682c261a2f72342ca6665647e8ff5ebc3bd8a584d"
+    },
+    {
+      "name": "devlog-upgrade",
+      "path": ".claude/commands/devlog-upgrade.md",
+      "sha256": "d0f7b7852617a4e79e32dc3b69a2a1eb628e5ac9df8c8c57a15f6413809a96d7"
     },
     {
       "name": "devlog-write",

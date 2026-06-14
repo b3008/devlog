@@ -220,7 +220,7 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 
 ## Slash commands (Claude Code)
 
-Installing for Claude Code also drops three slash commands into
+Installing for Claude Code also drops four slash commands into
 `.claude/commands/` (or `~/.claude/commands/` for `--global` installs).
 They give you direct, on-demand control over the blog from inside any
 Claude Code session — no flag needed, they ship by default.
@@ -237,10 +237,13 @@ gracefully if the project hasn't been scaffolded.
 | `/devlog-catchup` | Reads `blog/_index.md`, the 5 most recent entries, and `.devlog/learned.md`, then returns a structured project briefing — project arc, recent work, open threads, glossary highlights. Use at the start of a session to load context. |
 | `/devlog-write <topic>` | Writes a new entry about the given topic. Computes the next per-day index `NN` and ISO timestamp, derives a kebab-case slug, follows your project's convention (sections, voice, tags from `.devlog/config.yaml`), and updates `blog/_index.md`. Refuses vague input rather than fabricating. |
 | `/devlog-manicure [topic]` | Four-phase audit of past entries: categorizes findings (followed-through, revised, discarded, drifted, etc.), writes a recap entry, then proposes wipes or dated blockquote annotations (`> **Update YYYY-MM-DD**: …`) for you to approve before applying. Optional topic argument scopes the manicure to a single thread. |
+| `/devlog-upgrade [flags]` | Upgrades the `devlog` tool to the latest from GitHub, then resyncs this repo's convention to it. A thin driver over the two-layer [`devlog upgrade`](#upgrading) CLI: it previews with `--check`, applies when the install is self-upgradeable, and falls back to the right manual step (e.g. `git pull` for a source checkout) when it isn't. Scope with `--tool-only` / `--project-only`. |
 
-The three commands form a working loop: **catchup** loads the blog into
+The first three form a working loop: **catchup** loads the blog into
 context, **write** adds new entries, **manicure** audits and prunes
-what's already there. Uninstall removes them automatically.
+what's already there. **upgrade** is maintenance — it pulls the latest
+devlog and resyncs the convention to it. Uninstall removes them
+automatically.
 
 <br>
 
@@ -386,7 +389,8 @@ your-project/
 │   └── commands/                # slash commands (claude installs only)
 │       ├── devlog-catchup.md
 │       ├── devlog-write.md
-│       └── devlog-manicure.md
+│       ├── devlog-manicure.md
+│       └── devlog-upgrade.md
 ├── blog/
 │   ├── _index.md
 │   ├── 2026-04-16-01-first-entry.md
