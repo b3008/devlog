@@ -781,3 +781,106 @@ class TestVersion:
         result = runner.invoke(app, ["version"])
         assert result.exit_code == 0
         assert __version__ in result.output
+
+
+class TestUpgrade:
+    """The two-layer self-upgrade. Every subprocess seam (tool upgrade, version
+    query, resync) is monkeypatched so no real package manager is invoked."""
+
+    @staticmethod
+    def _uv_tool():
+        import devlog_cli
+
+        return devlog_cli._InstallMethod("uv-tool", "uv tool", ["uv", "tool", "upgrade", "devlog"], True)
+
+    @staticmethod
+    def _source():
+        import devlog_cli
+
+        return devlog_cli._InstallMethod("source", "a source checkout", None, False)
+
+    def test_mutually_exclusive_flags(self, installed_project: Path):
+        result = runner.invoke(app, ["upgrade", "--project-only", "--tool-only"])
+        assert result.exit_code == 1
+        assert "mutually exclusive" in result.output
+
+    def test_check_previews_without_mutating(self, installed_project: Path, monkeypatch):
+        import devlog_cli
+
+        tool_calls: list = []
+        monkeypatch.setattr(devlog_cli, "_detect_install_method", self._uv_tool)
+        monkeypatch.setattr(devlog_cli, "_run_tool_upgrade", lambda cmd: tool_calls.append(cmd) or 0)
+        result = runner.invoke(app, ["upgrade", "--check"])
+        assert result.exit_code == 0
+        assert "would upgrade tool" in result.output
+        assert "would resync" in result.output
+        assert tool_calls == []  # --check never mutates
+
+    def test_source_checkout_prints_guidance(self, installed_project: Path, monkeypatch):
+        import devlog_cli
+
+        tool_calls: list = []
+        monkeypatch.setattr(devlog_cli, "_detect_install_method", self._source)
+        monkeypatch.setattr(devlog_cli, "_run_tool_upgrade", lambda cmd: tool_calls.append(cmd) or 0)
+        result = runner.invoke(app, ["upgrade"])
+        assert result.exit_code == 0
+        assert "can't self-upgrade" in result.output
+        assert "git pull" in result.output
+        assert tool_calls == []  # never attempts an upgrade it can't do
+
+    def test_full_upgrade_uv_tool(self, installed_project: Path, monkeypatch):
+        import devlog_cli
+
+        tool_calls: list = []
+        resync_calls: list = []
+        monkeypatch.setattr(devlog_cli, "_detect_install_method", self._uv_tool)
+        monkeypatch.setattr(devlog_cli, "_run_tool_upgrade", lambda cmd: tool_calls.append(cmd) or 0)
+        monkeypatch.setattr(devlog_cli, "_query_version", lambda exe: "0.4.0")
+        monkeypatch.setattr(
+            devlog_cli,
+            "_run_resync",
+            lambda exe, key, *, global_mode: resync_calls.append((key, global_mode)) or 0,
+        )
+        result = runner.invoke(app, ["upgrade"])
+        assert result.exit_code == 0
+        assert len(tool_calls) == 1
+        assert ("claude", False) in resync_calls
+        assert "→ 0.4.0" in result.output
+        assert "resynced" in result.output
+
+    def test_tool_only_skips_resync(self, installed_project: Path, monkeypatch):
+        import devlog_cli
+
+        resync_calls: list = []
+        monkeypatch.setattr(devlog_cli, "_detect_install_method", self._uv_tool)
+        monkeypatch.setattr(devlog_cli, "_run_tool_upgrade", lambda cmd: 0)
+        monkeypatch.setattr(devlog_cli, "_query_version", lambda exe: "0.4.0")
+        monkeypatch.setattr(devlog_cli, "_run_resync", lambda *a, **k: resync_calls.append(a) or 0)
+        result = runner.invoke(app, ["upgrade", "--tool-only"])
+        assert result.exit_code == 0
+        assert resync_calls == []
+        assert "tool upgrade complete" in result.output
+
+    def test_tool_failure_exits_nonzero(self, installed_project: Path, monkeypatch):
+        import devlog_cli
+
+        resync_calls: list = []
+        monkeypatch.setattr(devlog_cli, "_detect_install_method", self._uv_tool)
+        monkeypatch.setattr(devlog_cli, "_run_tool_upgrade", lambda cmd: 1)
+        monkeypatch.setattr(devlog_cli, "_run_resync", lambda *a, **k: resync_calls.append(a) or 0)
+        result = runner.invoke(app, ["upgrade"])
+        assert result.exit_code != 0
+        assert "failed" in result.output.lower()
+        assert resync_calls == []  # don't resync against a tool that didn't upgrade
+
+    def test_project_only_resyncs_in_process(self, installed_project: Path, monkeypatch):
+        import devlog_cli
+
+        tool_calls: list = []
+        monkeypatch.setattr(devlog_cli, "_run_tool_upgrade", lambda cmd: tool_calls.append(cmd) or 0)
+        claude_md = installed_project / "CLAUDE.md"
+        result = runner.invoke(app, ["upgrade", "--project-only"])
+        assert result.exit_code == 0
+        assert tool_calls == []  # never touches the tool
+        assert _SENTINEL_START_MARKER in claude_md.read_text()
+        assert "in sync" in result.output

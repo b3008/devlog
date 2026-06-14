@@ -40,6 +40,7 @@ grows automatically, in the agent's own voice.
 - [Supported agents](#supported-agents)
 - [How it works](#how-it-works)
 - [Configuration](#configuration)
+- [Upgrading](#upgrading)
 - [Uninstalling](#uninstalling)
 - [License](#license)
 
@@ -212,6 +213,7 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 | `devlog index` | Regenerate `blog/_index.md` from entry frontmatter (newest first). |
 | `devlog list` | List all supported agents. |
 | `devlog status` | Show which agents currently have the convention active. |
+| `devlog upgrade` | Upgrade the devlog tool, then resync this repo's convention to it. `--check` previews; `--project-only` / `--tool-only` scope it. |
 | `devlog version` | Print version. |
 
 <br>
@@ -409,6 +411,56 @@ Edit `.devlog/config.yaml` to customize:
 
 Re-run `devlog install --ai <key>` after editing to regenerate the injected
 section.
+
+<br>
+
+## Upgrading
+
+A devlog install has two layers — the **tool** itself and the **convention** it
+dropped into your repo — and they version independently. `devlog upgrade` brings
+both up to date in one step:
+
+```bash
+devlog upgrade
+```
+
+It detects how the tool was installed, runs the matching upgrade (e.g.
+`uv tool upgrade devlog`), then re-invokes the freshly installed binary to
+resync every agent in this repo — convention block, hooks, and slash commands —
+preserving any files you've customized. Preview first with `--check`; scope with
+`--project-only` (resync this repo only) or `--tool-only` (bump the binary only):
+
+```bash
+devlog upgrade --check          # show what would happen, change nothing
+devlog upgrade --project-only   # resync this repo to the installed tool
+devlog upgrade --tool-only      # upgrade the binary, skip the resync
+```
+
+If devlog is running from a source checkout or an ephemeral `uvx` invocation —
+where there's no managed binary to replace — `upgrade` won't guess; it prints
+the exact command to run and stops.
+
+<details>
+<summary>Prefer to do it by hand?</summary>
+
+<br>
+
+```bash
+# 1. Upgrade the tool
+uv tool upgrade devlog
+#    (or, for a clean reinstall from latest:)
+# uv tool install --force git+https://github.com/b3008/devlog.git
+
+# 2. Resync this repo's convention to the new tool
+devlog install --ai claude        # add --global if it was a global install
+```
+
+`devlog status` reports the version that performed the install versus the
+running tool and flags any drift — and if the repo was last touched by a *newer*
+devlog than your tool, it tells you to upgrade the tool first rather than
+resyncing (which would downgrade).
+
+</details>
 
 <br>
 
