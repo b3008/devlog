@@ -121,13 +121,10 @@ def init(
         tree.add("[dim].devlog/learned.md already exists[/dim]")
 
     # .devlog/.gitignore — keep the runtime session log out of version control
-    created = _ensure_devlog_gitignore(devlog_dir)
-    if created:
+    if _ensure_devlog_gitignore(devlog_dir):
         tree.add("[green]Created .devlog/.gitignore[/green]")
-    elif (devlog_dir / ".gitignore").exists():
-        tree.add("[dim].devlog/.gitignore already exists[/dim]")
     else:
-        tree.add("[red]Failed to create .devlog/.gitignore[/red]")
+        tree.add("[dim].devlog/.gitignore already exists[/dim]")
 
     console.print()
     console.print(tree)
@@ -210,13 +207,7 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
 
     # Ensure .devlog/.gitignore exists (covers projects initialized before it
     # shipped — e.g. installing --with-hook into an older devlog repo).
-    devlog_dir = project_root / ".devlog"
-    _ensure_devlog_gitignore(devlog_dir)
-    if not (devlog_dir / ".gitignore").exists():
-        console.print(
-            "[yellow]Warning: could not create .devlog/.gitignore; "
-            "sessions.jsonl may appear as untracked.[/yellow]"
-        )
+    _ensure_devlog_gitignore(project_root / ".devlog")
 
     # Fold tags discovered in existing entries into the rendered vocabulary
     base_tags = set(config["tags"])
