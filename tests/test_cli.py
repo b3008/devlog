@@ -230,6 +230,16 @@ class TestSlashCommands:
         body = cmd_file.read_text(encoding="utf-8")
         assert "$ARGUMENTS" in body
 
+    def test_upgrade_command_file_created(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd_file = initialized_project / ".claude" / "commands" / "devlog-upgrade.md"
+        assert cmd_file.exists()
+        body = cmd_file.read_text(encoding="utf-8")
+        # Drives the CLI's two-layer upgrade and forwards its flags.
+        assert "devlog upgrade" in body
+        assert "--check" in body
+        assert "$ARGUMENTS" in body
+
     def test_manicure_command_file_created(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude"])
         cmd_file = initialized_project / ".claude" / "commands" / "devlog-manicure.md"
@@ -252,18 +262,20 @@ class TestSlashCommands:
         assert "devlog-catchup" in names
         assert "devlog-write" in names
         assert "devlog-manicure" in names
+        assert "devlog-upgrade" in names
 
     def test_install_message_lists_command(self, initialized_project: Path):
         result = runner.invoke(app, ["install", "--ai", "claude"])
         assert "/devlog-catchup" in result.output
         assert "/devlog-write" in result.output
         assert "/devlog-manicure" in result.output
+        assert "/devlog-upgrade" in result.output
 
     def test_idempotent_on_reinstall(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude"])
         runner.invoke(app, ["install", "--ai", "claude"])
         cmd_files = list((initialized_project / ".claude" / "commands").glob("*.md"))
-        assert len(cmd_files) == 3  # catchup + write + manicure
+        assert len(cmd_files) == 4  # catchup + write + manicure + upgrade
 
     def test_not_installed_for_non_claude(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "copilot"])

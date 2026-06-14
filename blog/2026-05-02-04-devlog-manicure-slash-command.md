@@ -43,7 +43,11 @@ The recap entry generated in Phase 2 is itself a regular blog entry — same fil
 
 ## What's next
 
-This is now the full set of slash commands shipping in the first cut: read (`catchup`), write (`write`), prune (`manicure`). The natural next steps:
+This is now the full set of slash commands shipping in the first cut: read (`catchup`), write (`write`), prune (`manicure`).
+
+> **Update 2026-06-14**: a fourth command, **`/devlog-upgrade`**, shipped later (v0.4.0) — a maintenance verb that upgrades the devlog tool from GitHub and resyncs the convention. "The full set" was the full set of the *first cut*, not the final set. See [2026-06-14-04-devlog-upgrade-slash-command.md](2026-06-14-04-devlog-upgrade-slash-command.md).
+
+The natural next steps:
 
 - **Run `/devlog-manicure` on this project** to dogfood it. Today already produced 4 entries; tomorrow's first session is a good moment to test the audit pass against a small but real corpus.
 - **Decide whether the recap entry should have its own subtype** in the convention. Currently it's just a regular entry tagged `documentation`. A dedicated tag like `recap` could surface them faster in the index — worth considering after a few real recap entries exist to compare.
