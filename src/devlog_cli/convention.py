@@ -277,6 +277,8 @@ def generate_convention(config: dict[str, Any], *, global_mode: bool = False) ->
 
 Every project you work on keeps a development blog in `{blog_dir}/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion \u2014 not only code or files produced. If it did, write or update the blog entry as part of the same turn \u2014 don't defer it to a future session and don't wait to be asked.
 
+When you write or update an entry, report it in one line \u2014 just the file path (e.g. `{blog_dir}/2026-06-14-01-slug.md`). When no entry is warranted, say nothing about the devlog at all. Don't narrate which triggers you checked, what you scaffolded, or why an entry wasn't needed.
+
 ### First-time setup (per project)
 
 If the current project does not yet have a `{blog_dir}/` directory, scaffold it before writing the first entry:
@@ -289,7 +291,9 @@ If the project has a `.devlog/config.yaml`, use its settings for triggers, voice
         opener = f"""\
 ## Development Blog (Automatic)
 
-This project keeps a development blog in `{blog_dir}/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion \u2014 not only code or files produced. If it did, write or update the blog entry as part of the same turn \u2014 don't defer it to a future session and don't wait to be asked."""
+This project keeps a development blog in `{blog_dir}/`. **Before ending any response in which non-trivial progress was made**, check whether the session hit one of the triggers below. Progress includes decisions reached in discussion \u2014 not only code or files produced. If it did, write or update the blog entry as part of the same turn \u2014 don't defer it to a future session and don't wait to be asked.
+
+When you write or update an entry, report it in one line \u2014 just the file path (e.g. `{blog_dir}/2026-06-14-01-slug.md`). When no entry is warranted, say nothing about the devlog at all. Don't narrate which triggers you checked, what you scaffolded, or why an entry wasn't needed."""
 
     text = f"""\
 {opener}
