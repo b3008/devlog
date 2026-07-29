@@ -1,8 +1,9 @@
 ---
+type: "Devlog Entry"
 title: "Making the convention adaptive: learned.md + tag discovery"
 date: 2026-04-16
 tags: [architecture, feature, cli]
-summary: "The injected convention no longer freezes at install time — it grows with the project via an agent-maintained notebook and a self-updating tag vocabulary."
+description: "The injected convention no longer freezes at install time — it grows with the project via an agent-maintained notebook and a self-updating tag vocabulary."
 ---
 
 ## What changed

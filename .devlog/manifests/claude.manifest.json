@@ -1,9 +1,9 @@
 {
   "agent": "claude",
-  "version": "0.4.1",
-  "installed_at": "2026-06-17T05:40:12.151545+00:00",
+  "version": "0.5.0",
+  "installed_at": "2026-07-29T12:32:29.517586+00:00",
   "files": {
-    "CLAUDE.md": "d81b91cf76dd0b54c94c9206709b61a674e9a305d6e89e15c65366c46b4a49b9"
+    "CLAUDE.md": "55e63ae9ef095e71b43636e88fe0952e1ea8383e49aa536ef30e26fedc36971d"
   },
   "hooks": [
     {
@@ -25,22 +25,22 @@
     {
       "name": "devlog-catchup",
       "path": ".claude/commands/devlog-catchup.md",
-      "sha256": "19252df450e95c11d206d14e13841e81300a3eda427cc553fc32023ee6a4362e"
+      "sha256": "1a78323ef12ef959014a2dc72b689d638a920d4df4ff2884e4abe9f1f8966ea1"
     },
     {
       "name": "devlog-manicure",
       "path": ".claude/commands/devlog-manicure.md",
-      "sha256": "0bbcde3fe751130ec8981c1682c261a2f72342ca6665647e8ff5ebc3bd8a584d"
+      "sha256": "e3516c8c759c35c00c6b9c5d2fcee91579388968079253f573b5f212e69eab55"
     },
     {
       "name": "devlog-upgrade",
       "path": ".claude/commands/devlog-upgrade.md",
-      "sha256": "d0f7b7852617a4e79e32dc3b69a2a1eb628e5ac9df8c8c57a15f6413809a96d7"
+      "sha256": "7c3a9fe7b73e27963d0a5a2a6b1f616ded060fad7bb5c1ec76d205572f207219"
     },
     {
       "name": "devlog-write",
       "path": ".claude/commands/devlog-write.md",
-      "sha256": "9f15553b973eda302729d5d3848780cd68caa77065b14f956fa301f057385d6a"
+      "sha256": "3da435d987a89a8265e1ff305d880d2e77dd95b97aa598d761e0573976d74281"
     }
   ]
 }

@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Round three: Copilot finds the failure modes I added by handling failure modes"
 date: 2026-05-02
 timestamp: 2026-05-02T13:06:58
 tags: [bug-fix, infrastructure]
-summary: "PR #11's Copilot review caught three defensive gaps in the manifest-hashing code from PR #11 itself — unhandled OSError, implicit encoding in tests, and orphan reconciliation that turns destructive when templates are missing. All three fixed; tests grew 102→104."
+description: "PR #11's Copilot review caught three defensive gaps in the manifest-hashing code from PR #11 itself — unhandled OSError, implicit encoding in tests, and orphan reconciliation that turns destructive when templates are missing. All three fixed; tests grew 102→104."
 ---
 
 ## What changed

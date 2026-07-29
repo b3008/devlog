@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Version-aware installs: 0.2.0, sentinel stamps, and drift reporting"
 date: 2026-06-12
 timestamp: 2026-06-12T15:47:40
 tags: [feature, cli, infrastructure]
-summary: "devlog finally knows what version its installs are from: __version__ bumped to 0.2.0 after fourteen months at 0.1.0, the sentinel block now carries a version stamp, and devlog status reports drift with reinstall as the upgrade command — auto-resync was considered and deliberately rejected."
+description: "devlog finally knows what version its installs are from: __version__ bumped to 0.2.0 after fourteen months at 0.1.0, the sentinel block now carries a version stamp, and devlog status reports drift with reinstall as the upgrade command — auto-resync was considered and deliberately rejected."
 ---
 
 ## What changed

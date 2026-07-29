@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Second slash command: /devlog-write for on-demand entries"
 date: 2026-05-02
 timestamp: 2026-05-02T10:17:16
 tags: [feature, cli, ux]
-summary: "A new /devlog-write <topic> slash command lets the user explicitly request an entry about anything, validating the drop-in extensibility of the templates/commands/ pattern shipped earlier today."
+description: "A new /devlog-write <topic> slash command lets the user explicitly request an entry about anything, validating the drop-in extensibility of the templates/commands/ pattern shipped earlier today."
 ---
 
 ## What changed

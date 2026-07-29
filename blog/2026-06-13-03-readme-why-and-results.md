@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "The README finally states the thesis: why-record first, blog as rendering"
 date: 2026-06-13
 timestamp: 2026-06-13T12:19:42
 tags: [documentation, ux, research]
-summary: "Added 'Why devlog?' and 'What you get' sections to the README, leading with the durable cross-agent why-record as the real product — drafted via a judge-panel-plus-honesty-skeptic workflow that caught three overclaims before they shipped."
+description: "Added 'Why devlog?' and 'What you get' sections to the README, leading with the durable cross-agent why-record as the real product — drafted via a judge-panel-plus-honesty-skeptic workflow that caught three overclaims before they shipped."
 ---
 
 ## What changed

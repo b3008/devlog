@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Auditing the README against the assessment — already current, one residual"
 date: 2026-06-13
 timestamp: 2026-06-13T12:10:36
 tags: [documentation, research]
-summary: "Checked the README against the 06-11 agent-codebase assessment and every change since; it was kept in lockstep with the 06-12 work, leaving only F11 (depth-of-support honesty) as an accepted, deferred residual."
+description: "Checked the README against the 06-11 agent-codebase assessment and every change since; it was kept in lockstep with the 06-12 work, leaving only F11 (depth-of-support honesty) as an accepted, deferred residual."
 ---
 
 ## What changed

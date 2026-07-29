@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Third slash command: /devlog-manicure for auditing and pruning the blog"
 date: 2026-05-02
 timestamp: 2026-05-02T10:24:35
 tags: [feature, cli, ux, architecture]
-summary: "A four-phase /devlog-manicure [topic] command audits past entries for what carried through, was revised, or quietly died, writes a recap entry, and proposes dated annotations or wipes for the user to approve before applying. Optional topic argument scopes the audit to a single thread."
+description: "A four-phase /devlog-manicure [topic] command audits past entries for what carried through, was revised, or quietly died, writes a recap entry, and proposes dated annotations or wipes for the user to approve before applying. Optional topic argument scopes the audit to a single thread."
 ---
 
 ## What changed

@@ -8,6 +8,7 @@ that gets injected into agent context files.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,15 @@ _SENTINEL_END_MARKER = "<!-- DEVLOG:END"
 
 _SENTINEL_VERSION_RE = re.compile(r"<!-- DEVLOG:START v([0-9A-Za-z.\-+]+)")
 
+# ── Open Knowledge Format (OKF) conformance ───────────────────────────────
+# Blog entries are OKF "concept documents": markdown files whose YAML
+# frontmatter carries a non-empty `type` (OKF's one required field). The
+# bundle-root index declares the format version via `okf_version`.
+# Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
+OKF_VERSION = "0.1"
+OKF_INDEX_FILE = "index.md"  # OKF reserves the bare `index.md` filename.
+DEFAULT_ENTRY_TYPE = "Devlog Entry"
+
 
 def sentinel_version(content: str) -> str | None:
     """Extract the version stamp from a devlog sentinel block, if present.
@@ -41,7 +51,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "blog_dir": "blog",
     "media_dir": "blog/media",
     "file_pattern": "YYYY-MM-DD-NN-slug.md",
-    "index_file": "_index.md",
+    "index_file": "index.md",
     "sections": [
         {"name": "What changed", "description": "concrete description of what was built/fixed"},
         {"name": "Why it matters", "description": "significance for the project, users, or architecture"},
@@ -77,11 +87,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "demo",
     ],
     "frontmatter": [
+        {"field": "type", "example": '"Devlog Entry"  # OKF concept type — the one field Open Knowledge Format requires'},
         {"field": "title", "example": '"Short descriptive title"'},
         {"field": "date", "example": "YYYY-MM-DD"},
         {"field": "timestamp", "example": "YYYY-MM-DDTHH:MM:SS  # ISO 8601 local time, captured when the entry is written"},
         {"field": "tags", "example": "[relevant, tags, from-list-below]"},
-        {"field": "summary", "example": '"One-sentence summary of what was accomplished and why it matters."'},
+        {"field": "description", "example": '"One-sentence summary of what was accomplished and why it matters."'},
     ],
     "media": {
         "enabled": True,
@@ -127,7 +138,7 @@ def scan_entries(project_root: Path, config: dict[str, Any]) -> tuple[int, str |
     blog_dir = project_root / config["blog_dir"]
     if not blog_dir.is_dir():
         return 0, None
-    index_file = config.get("index_file", "_index.md")
+    index_file = config.get("index_file", OKF_INDEX_FILE)
     dates: list[str] = []
     for md in blog_dir.glob("*.md"):
         if md.name == index_file:
@@ -145,7 +156,7 @@ def discover_tags(project_root: Path, config: dict[str, Any]) -> list[str]:
     blog_dir = project_root / config["blog_dir"]
     if not blog_dir.is_dir():
         return []
-    index_file = config.get("index_file", "_index.md")
+    index_file = config.get("index_file", OKF_INDEX_FILE)
     discovered: set[str] = set()
     for md in blog_dir.glob("*.md"):
         if md.name == index_file:
@@ -173,9 +184,13 @@ def build_index(
     generated instead. Returns ``(content, entry_count)``.
 
     An existing index's top-level heading is preserved; otherwise a heading is
-    built from ``fallback_title`` (default: the project directory name)."""
+    built from ``fallback_title`` (default: the project directory name).
+
+    The bundle-root index carries an ``okf_version`` frontmatter block — the one
+    place OKF permits frontmatter on an ``index.md`` — declaring the format
+    version so consumers can recognize the bundle."""
     blog_dir = project_root / config["blog_dir"]
-    index_file = config.get("index_file", "_index.md")
+    index_file = config.get("index_file", OKF_INDEX_FILE)
 
     entries: list[tuple[str, str, str, str]] = []
     for md in blog_dir.glob("*.md"):
@@ -195,23 +210,34 @@ def build_index(
         entries.append((date, timestamp, md.name, title))
     entries.sort(key=lambda e: (e[0], e[1], e[2]), reverse=True)
 
-    # Preserve an existing hand-written heading if there is one.
+    # Preserve an existing hand-written heading if there is one, skipping any
+    # leading frontmatter block (the root index may carry `okf_version`).
     heading = None
     index_path = blog_dir / index_file
     if index_path.exists():
         try:
-            for line in index_path.read_text(encoding="utf-8").splitlines():
-                if line.startswith("# "):
-                    heading = line
-                    break
-                if line.strip():
-                    break
+            raw_lines = index_path.read_text(encoding="utf-8").splitlines()
         except (OSError, UnicodeDecodeError):
-            pass
+            raw_lines = []
+        start = 0
+        if raw_lines and raw_lines[0].strip() == "---":
+            for i in range(1, len(raw_lines)):
+                if raw_lines[i].strip() == "---":
+                    start = i + 1
+                    break
+        for line in raw_lines[start:]:
+            if line.startswith("# "):
+                heading = line
+                break
+            if line.strip():
+                break
     if heading is None:
         heading = f"# {fallback_title or project_root.name} — Development Blog"
 
     lines = [
+        "---",
+        f'okf_version: "{OKF_VERSION}"',
+        "---",
         heading,
         "",
         "<!-- Generated by `devlog index` — newest first. Edit entries, not this list. -->",
@@ -221,6 +247,118 @@ def build_index(
         display_date = date or "undated"
         lines.append(f"- {display_date} — [{title}]({name})")
     return "\n".join(lines) + "\n", len(entries)
+
+
+def migrate_entry_text(text: str, *, entry_type: str = DEFAULT_ENTRY_TYPE) -> tuple[str, list[str]]:
+    """Bring one entry's frontmatter into OKF conformance. Idempotent.
+
+    Works on the raw frontmatter lines (not a parsed-then-redumped dict) so
+    existing field order, comments, and quoting survive untouched. Two edits:
+
+      * insert a ``type`` field if absent — OKF's one required field;
+      * rename a ``summary:`` key to OKF's canonical ``description:`` (skipped
+        when a ``description:`` is already present, to avoid a collision).
+
+    Returns ``(new_text, changes)``. ``changes`` is empty — and the text is
+    returned verbatim — when nothing was needed or the file has no frontmatter
+    (a missing frontmatter block is not malformed under OKF; it is just skipped)."""
+    if not (text.startswith("---\n") or text.startswith("---\r\n")):
+        return text, []
+    lines = text.split("\n")
+    close = None
+    for i in range(1, len(lines)):
+        if lines[i].rstrip("\r") == "---":
+            close = i
+            break
+    if close is None:
+        return text, []
+
+    fm = lines[1:close]
+    changes: list[str] = []
+    has_type = any(re.match(r"\s*type\s*:", ln) for ln in fm)
+    has_description = any(re.match(r"\s*description\s*:", ln) for ln in fm)
+
+    new_fm = list(fm)
+    if not has_description:
+        for idx, ln in enumerate(new_fm):
+            m = re.match(r"(\s*)summary(\s*:.*)$", ln, flags=re.DOTALL)
+            if m:
+                new_fm[idx] = f"{m.group(1)}description{m.group(2)}"
+                changes.append("summary→description")
+                break
+    if not has_type:
+        new_fm.insert(0, f'type: "{entry_type}"')
+        changes.append("added type")
+
+    if not changes:
+        return text, []
+    return "\n".join([lines[0], *new_fm, *lines[close:]]), changes
+
+
+@dataclass
+class MigrationPlan:
+    """The work needed to bring a blog to OKF conformance, computed without
+    writing anything. Shared by `devlog migrate`, `devlog status`, and the
+    auto-migrate step of `devlog install` so detection and execution agree."""
+
+    entry_changes: list[tuple[str, list[str]]] = field(default_factory=list)
+    unchanged: int = 0
+    current_index: str = OKF_INDEX_FILE
+    index_rename: bool = False  # an index exists under a non-OKF name
+    index_needs_stamp: bool = False  # index.md exists but lacks okf_version
+    config_update: bool = False  # config index_file points somewhere other than index.md
+    config_frontmatter_update: bool = False  # config frontmatter list lacks type / still has summary
+
+    @property
+    def needed(self) -> bool:
+        return bool(
+            self.entry_changes
+            or self.index_rename
+            or self.index_needs_stamp
+            or self.config_update
+            or self.config_frontmatter_update
+        )
+
+
+def plan_migration(project_root: Path, config: dict[str, Any]) -> MigrationPlan:
+    """Inspect a blog and report what OKF migration would change. Pure: reads
+    files, writes nothing. ``plan.needed`` answers "does this blog need migrating?"."""
+    blog_dir = project_root / config["blog_dir"]
+    current_index = config.get("index_file", OKF_INDEX_FILE)
+    plan = MigrationPlan(current_index=current_index)
+    skip = {current_index, OKF_INDEX_FILE}
+
+    if blog_dir.is_dir():
+        for md in sorted(blog_dir.glob("*.md")):
+            if md.name in skip:
+                continue
+            try:
+                text = md.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            _, changes = migrate_entry_text(text)
+            if changes:
+                plan.entry_changes.append((md.name, changes))
+            else:
+                plan.unchanged += 1
+
+    current_index_path = blog_dir / current_index
+    target_path = blog_dir / OKF_INDEX_FILE
+    plan.index_rename = current_index != OKF_INDEX_FILE and current_index_path.exists()
+    if not plan.index_rename and target_path.exists():
+        try:
+            fm = _extract_frontmatter(target_path.read_text(encoding="utf-8")) or {}
+        except (OSError, UnicodeDecodeError):
+            fm = {}
+        plan.index_needs_stamp = "okf_version" not in fm
+    plan.config_update = current_index != OKF_INDEX_FILE
+
+    # The convention template for NEW entries is generated from this list, so a
+    # stale list (no `type`, or still using `summary`) would keep producing
+    # non-conformant entries even after the existing ones are fixed.
+    fm_fields = [str(f.get("field")) for f in config.get("frontmatter", []) if isinstance(f, dict)]
+    plan.config_frontmatter_update = "type" not in fm_fields or "summary" in fm_fields
+    return plan
 
 
 def generate_convention(config: dict[str, Any], *, global_mode: bool = False) -> str:
@@ -283,7 +421,7 @@ When you write or update an entry, report it in one line \u2014 just the file pa
 
 If the current project does not yet have a `{blog_dir}/` directory, scaffold it before writing the first entry:
 1. Create `{blog_dir}/`, `{blog_dir}/media/`, and `.devlog/`.
-2. Create `{blog_dir}/{config.get("index_file", "_index.md")}` with a heading using the project\u2019s directory name.
+2. Create `{blog_dir}/{config.get("index_file", OKF_INDEX_FILE)}` with a heading using the project\u2019s directory name.
 3. Copy `.devlog/learned.md` from the template below or create an empty one with section headings: Glossary, Entities, Recurring themes, Open threads.
 
 If the project has a `.devlog/config.yaml`, use its settings for triggers, voice, and tags **instead of** the defaults below. If it doesn\u2019t, use the defaults."""
@@ -316,7 +454,7 @@ When durable project knowledge emerges during the session \u2014 a new domain te
 
 1. Create a file: `{blog_dir}/YYYY-MM-DD-NN-slug.md` — `NN` is a zero-padded per-day index (`01`, `02`, ...). Scan `{blog_dir}/` for existing files matching the date and pick the next available number; start at `01` if none exist. The index keeps entries in deterministic chronological order under lexical sort.
 2. Set `date` to today and `timestamp` to the current local time in ISO 8601 (`YYYY-MM-DDTHH:MM:SS`) at the moment you write the entry. The timestamp captures when within the day the work happened — precise ordering for entries that share a date.
-3. Use this frontmatter template:
+3. Use this frontmatter template. Entries are [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) concept documents, so `type` is required (keep it as `"Devlog Entry"` unless the project says otherwise); the other fields are recommended:
 
 {fm_block}
 
@@ -326,7 +464,7 @@ When durable project knowledge emerges during the session \u2014 a new domain te
 5. **Capture supporting artifacts** \u2014 concrete evidence makes entries credible and portfolio-ready:
 {media_block}
 
-6. Regenerate the index: run `devlog index` if the CLI is available; otherwise add the new entry to the top of the list in `{blog_dir}/{config.get("index_file", "_index.md")}`.
+6. Regenerate the index: run `devlog index` if the CLI is available; otherwise add the new entry to the top of the list in `{blog_dir}/{config.get("index_file", OKF_INDEX_FILE)}`.
 
 7. If the entry corrects or supersedes a claim made in an earlier entry, annotate the superseded entry **in the same turn**: add a dated blockquote (`> **Update YYYY-MM-DD**: \u2026`) under the affected claim, linking to the new entry. Unmarked stale claims compound \u2014 future sessions act on them at face value.
 
@@ -345,22 +483,28 @@ Prefer tags from this list. If a new tag genuinely fits and recurs, use it in th
     return text
 
 
-def generate_thin_convention(config: dict[str, Any]) -> str:
+def generate_thin_convention(
+    config: dict[str, Any],
+    *,
+    agent_key: str = "claude",
+    global_context_path: str = "~/.claude/CLAUDE.md",
+) -> str:
     """Generate the abbreviated project block used when the full convention is
-    already injected globally (~/.claude/CLAUDE.md).
+    already injected globally (e.g. ~/.claude/CLAUDE.md).
 
     Injecting the full text in both places duplicates ~1.5k tokens in every
     session and lets the two copies drift; the thin block points at the global
     copy and carries only the project-specific pointers."""
     blog_dir = config["blog_dir"]
+    context_name = global_context_path.rsplit("/", 1)[-1]
     return f"""\
 ## Development Blog (Automatic)
 
-This project keeps a development blog in `{blog_dir}/`. The full convention — triggers, entry format, voice, tags — is in your global CLAUDE.md (`~/.claude/CLAUDE.md`, installed by devlog); follow it here. Project-specific settings live in `.devlog/config.yaml` and take precedence over the global defaults.
+This project keeps a development blog in `{blog_dir}/`. The full convention — triggers, entry format, voice, tags — is in your global {context_name} (`{global_context_path}`, installed by devlog); follow it here. Project-specific settings live in `.devlog/config.yaml` and take precedence over the global defaults.
 
 Before writing an entry, read `.devlog/learned.md` for accumulated project vocabulary, themes, and open threads — and extend it when durable knowledge emerges.
 
-Collaborators without the global devlog install: run `devlog install --ai claude --full` in this project to inject the standalone convention here instead."""
+Collaborators without the global devlog install: run `devlog install --ai {agent_key} --full` in this project to inject the standalone convention here instead."""
 
 
 def wrap_with_sentinels(content: str) -> str:

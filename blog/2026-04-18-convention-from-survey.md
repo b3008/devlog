@@ -1,8 +1,9 @@
 ---
+type: "Devlog Entry"
 title: "Applying the landscape survey: new section, voice rule, and tag"
 date: 2026-04-18
 tags: [feature, architecture]
-summary: "Three concrete lessons from the competitive survey — a 'Surprises' section, a first-hand narration voice guideline, and a 'research' tag — folded into the default convention."
+description: "Three concrete lessons from the competitive survey — a 'Surprises' section, a first-hand narration voice guideline, and a 'research' tag — folded into the default convention."
 ---
 
 ## What changed

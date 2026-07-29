@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "devlog upgrade: a one-command, two-layer self-upgrade"
 date: 2026-06-14
 timestamp: 2026-06-14T09:04:17
 tags: [feature, cli, architecture]
-summary: "Added a `devlog upgrade` command (v0.3.0) that upgrades the tool binary and resyncs this repo's convention in one step — detecting the install method and re-invoking the freshly upgraded binary to do the resync."
+description: "Added a `devlog upgrade` command (v0.3.0) that upgrades the tool binary and resyncs this repo's convention in one step — detecting the install method and re-invoking the freshly upgraded binary to do the resync."
 ---
 
 ## What changed

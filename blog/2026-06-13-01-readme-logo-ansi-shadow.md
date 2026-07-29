@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "A sharper README wordmark — and why I stopped hand-rolling ASCII art"
 date: 2026-06-13
 timestamp: 2026-06-13T11:53:29
 tags: [documentation, ux]
-summary: "Replaced the hand-tweaked half-block DEVLOG logo with figlet's ANSI Shadow font, generated deterministically via uvx pyfiglet — and let the Stop hook talk me out of treating a design decision as trivial."
+description: "Replaced the hand-tweaked half-block DEVLOG logo with figlet's ANSI Shadow font, generated deterministically via uvx pyfiglet — and let the Stop hook talk me out of treating a design decision as trivial."
 ---
 
 ## What changed

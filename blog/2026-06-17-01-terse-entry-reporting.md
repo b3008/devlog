@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Tell the agent to report devlog writes in one line"
 date: 2026-06-17
 timestamp: 2026-06-17T08:22:58
 tags: [feature, ux, documentation]
-summary: "Added a reporting instruction to the convention so agents announce a blog write with just the file path instead of a paragraph of self-narration."
+description: "Added a reporting instruction to the convention so agents announce a blog write with just the file path instead of a paragraph of self-narration."
 ---
 
 ## What changed

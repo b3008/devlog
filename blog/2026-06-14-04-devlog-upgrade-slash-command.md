@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "/devlog-upgrade: a slash command that drives the two-layer upgrade"
 date: 2026-06-14
 timestamp: 2026-06-14T11:22:08
 tags: [feature, cli, ux]
-summary: "Added a fourth slash command, /devlog-upgrade (v0.4.0), a thin AI-driven driver over the devlog upgrade CLI so the maintenance verb is reachable from inside any Claude Code session — not just the terminal."
+description: "Added a fourth slash command, /devlog-upgrade (v0.4.0), a thin AI-driven driver over the devlog upgrade CLI so the maintenance verb is reachable from inside any Claude Code session — not just the terminal."
 ---
 
 ## What changed

@@ -31,12 +31,17 @@ from devlog_cli._version import __version__
 from devlog_cli.agents import AGENTS, AgentConfig, get_agent
 from devlog_cli.convention import (
     _SENTINEL_START_MARKER,
+    OKF_INDEX_FILE,
+    OKF_VERSION,
+    MigrationPlan,
     build_index,
     discover_tags,
     generate_convention,
     generate_thin_convention,
     inject_convention,
     load_config,
+    migrate_entry_text,
+    plan_migration,
     remove_convention,
     scan_entries,
     sentinel_version,
@@ -101,10 +106,10 @@ def init(
     media_dir.mkdir(parents=True, exist_ok=True)
     tree.add(f"[green]Created {config['media_dir']}/[/green]")
 
-    # blog/_index.md
-    index_file = blog_dir / config.get("index_file", "_index.md")
+    # blog/index.md — OKF bundle-root index
+    index_file = blog_dir / config.get("index_file", OKF_INDEX_FILE)
     if not index_file.exists():
-        template = (_templates_dir() / "_index.md").read_text(encoding="utf-8")
+        template = (_templates_dir() / "index.md").read_text(encoding="utf-8")
         content = template.replace("{project_name}", project_name)
         index_file.write_text(content, encoding="utf-8")
         tree.add(f"[green]Created {config['blog_dir']}/{index_file.name}[/green]")
@@ -148,7 +153,7 @@ def init(
 
 @app.command()
 def install(
-    ai: str = typer.Option(..., "--ai", help="AI agent key (e.g. claude, copilot, gemini)."),
+    ai: str = typer.Option(..., "--ai", help="AI agent key (e.g. claude, opencode, copilot, gemini)."),
     with_hook: bool = typer.Option(
         False,
         "--with-hook",
@@ -157,7 +162,8 @@ def install(
     global_: bool = typer.Option(
         False,
         "--global",
-        help="(claude only) Install into ~/.claude/ so the convention applies to every project.",
+        help="(claude, opencode) Install into the agent's global config dir "
+        "so the convention applies to every project.",
     ),
     full: bool = typer.Option(
         False,
@@ -173,9 +179,18 @@ def install(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1)
 
-    if (with_hook or global_) and ai != "claude":
-        flag = "--global" if global_ else "--with-hook"
-        console.print(f"[red]{flag} is only supported for the 'claude' agent right now (got {ai!r}).[/red]")
+    if with_hook and not agent.supports_hooks:
+        supported = ", ".join(sorted(k for k, a in AGENTS.items() if a.supports_hooks))
+        console.print(
+            f"[red]--with-hook is only supported for: {supported} (got {ai!r}).[/red]"
+        )
+        raise typer.Exit(1)
+
+    if global_ and agent.global_dir is None:
+        supported = ", ".join(sorted(k for k, a in AGENTS.items() if a.global_dir))
+        console.print(
+            f"[red]--global is only supported for: {supported} (got {ai!r}).[/red]"
+        )
         raise typer.Exit(1)
 
     if global_:
@@ -203,6 +218,15 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
 
     config = load_config(project_root)
 
+    # Auto-migrate a pre-OKF blog before regenerating the convention, so the
+    # injected block reflects the new index name. install is the upgrade path,
+    # so this is where a legacy blog heals itself without the user thinking
+    # about it. Idempotent: a conformant blog plans nothing and is left alone.
+    okf_plan = plan_migration(project_root, config)
+    if okf_plan.needed:
+        _apply_migration(project_root, config, okf_plan)
+        config = load_config(project_root)  # index_file may have changed
+
     # Ensure learned.md exists (covers upgrades from pre-learned.md installs)
     learned_path = project_root / ".devlog" / "learned.md"
     if not learned_path.exists():
@@ -227,14 +251,29 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
 
     # When the full convention is already injected globally, drop a thin
     # pointer block instead of duplicating ~1.5k tokens in every session.
-    thin = agent.key == "claude" and not full and _global_install_detected(agent)
+    thin = agent.global_dir is not None and not full and _global_install_detected(agent)
     convention_text = (
-        generate_thin_convention(config) if thin else generate_convention(config)
+        generate_thin_convention(
+            config,
+            agent_key=agent.key,
+            global_context_path=f"~/{agent.global_dir}/{agent.context_file}",
+        )
+        if thin
+        else generate_convention(config)
     )
     manifest = Manifest(agent_key=agent.key, project_root=project_root, version=__version__)
     previous_manifest = Manifest.load(manifest_path, project_root) if manifest_path.exists() else None
 
     tree = Tree(f"[bold green]Installing devlog convention[/bold green] — {agent.name}")
+    if okf_plan.needed:
+        n = len(okf_plan.entry_changes)
+        bits = [f"{n} entr{'y' if n == 1 else 'ies'}"] if n else []
+        if okf_plan.index_rename:
+            bits.append(f"index → {OKF_INDEX_FILE}")
+        if okf_plan.config_update or okf_plan.config_frontmatter_update:
+            bits.append("config")
+        detail = ", ".join(bits) or "index stamped"
+        tree.add(f"[green]Migrated blog to OKF v{OKF_VERSION}[/green] ([dim]{detail}[/dim])")
     if thin:
         tree.add(
             "[green]Global install detected — using the thin project block[/green] "
@@ -256,10 +295,12 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
     manifest.files[agent.context_file] = Manifest._sha256(new_content)
     tree.add(f"[green]Injected convention into {agent.context_file}[/green]")
 
-    # Install Claude Code slash commands (default-on for claude installs).
-    if agent.key == "claude":
+    # Install slash commands (default-on for agents with a commands dir).
+    if agent.commands_dir:
         prev_commands = previous_manifest.commands if previous_manifest else []
-        records, preserved, orphans = _install_claude_commands(project_root, prev_commands)
+        records, preserved, orphans = _install_agent_commands(
+            project_root, agent.commands_dir, prev_commands
+        )
         for cmd_record in records:
             manifest.commands.append(cmd_record)
             if cmd_record["name"] in preserved:
@@ -279,7 +320,7 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
 
     # Install the Claude Code hooks \u2014 when requested, or carried forward
     # from a previous install.
-    if agent.key == "claude":
+    if agent.supports_hooks:
         _install_claude_hooks(project_root, previous_manifest, with_hook, tree, manifest)
 
     manifest.save()
@@ -292,7 +333,7 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
         f"[green]Done.[/green] {agent.name} will now maintain a development blog "
         f"in [cyan]{config['blog_dir']}/[/cyan]."
     )
-    if not manifest.hooks and agent.key == "claude":
+    if not manifest.hooks and agent.supports_hooks:
         console.print(
             "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a Claude Code "
             "Stop hook that nudges the agent before each turn ends.[/dim]"
@@ -300,7 +341,9 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
 
 
 def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
-    """Global install: inject convention into ~/.claude/CLAUDE.md so it applies to every project."""
+    """Global install: inject convention into the agent's global context file
+    (e.g. ~/.claude/CLAUDE.md, ~/.config/opencode/AGENTS.md) so it applies to
+    every project."""
     from devlog_cli.convention import DEFAULT_CONFIG
 
     home = Path.home()
@@ -318,8 +361,8 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
 
     tree = Tree(f"[bold green]Installing devlog convention (global)[/bold green] — {agent.name}")
 
-    # Inject into ~/.claude/CLAUDE.md
-    ctx_rel = f"{GLOBAL_CONTEXT_DIR_REL}/{agent.context_file}"
+    # Inject into the agent's global context file (e.g. ~/.claude/CLAUDE.md)
+    ctx_rel = f"{agent.global_dir}/{agent.context_file}"
     ctx_path = home / ctx_rel
     if ctx_path.exists():
         existing = ctx_path.read_text(encoding="utf-8")
@@ -333,11 +376,12 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
     tree.add(f"[green]Injected convention into ~/{ctx_rel}[/green]")
 
     # Migrate away from the legacy global location (~/CLAUDE.md). Earlier
-    # versions wrote the convention there, where it loads via ancestor
+    # versions wrote the claude convention there, where it loads via ancestor
     # traversal rather than as true user memory — and double-injects once
-    # the new location exists.
+    # the new location exists. Claude-only history; other agents never wrote
+    # to the home root, and a sentinel block found there isn't ours to touch.
     legacy_path = home / agent.context_file
-    if legacy_path != ctx_path and legacy_path.exists():
+    if agent.key == "claude" and legacy_path != ctx_path and legacy_path.exists():
         try:
             legacy_content = legacy_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -355,10 +399,12 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
                     f"[yellow]Migrated: removed legacy ~/{agent.context_file} (was devlog-only)[/yellow]"
                 )
 
-    # Install Claude Code slash commands globally (default-on for claude installs).
-    if agent.key == "claude":
+    # Install slash commands globally (default-on for agents with a commands dir).
+    if agent.commands_dir:
         prev_commands = previous_manifest.commands if previous_manifest else []
-        records, preserved, orphans = _install_claude_commands(home, prev_commands)
+        records, preserved, orphans = _install_agent_commands(
+            home, f"{agent.global_dir}/commands", prev_commands
+        )
         for cmd_record in records:
             manifest.commands.append(cmd_record)
             if cmd_record["name"] in preserved:
@@ -378,9 +424,10 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
 
     # Install the global hooks \u2014 when requested, or carried forward from a
     # previous install.
-    _install_claude_hooks(
-        home, previous_manifest, with_hook, tree, manifest, global_mode=True, display_prefix="~/"
-    )
+    if agent.supports_hooks:
+        _install_claude_hooks(
+            home, previous_manifest, with_hook, tree, manifest, global_mode=True, display_prefix="~/"
+        )
 
     manifest.save()
     tree.add("[dim]Manifest saved[/dim]")
@@ -393,7 +440,7 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
         "[dim]Per-project customization: run [cyan]devlog init[/cyan] in any project to drop a "
         ".devlog/config.yaml with custom triggers, voice, and tags.[/dim]"
     )
-    if not manifest.hooks:
+    if not manifest.hooks and agent.supports_hooks:
         console.print(
             "[dim]Tip: re-run with [cyan]--with-hook[/cyan] to also install a global Stop hook.[/dim]"
         )
@@ -408,7 +455,7 @@ def uninstall(
     global_: bool = typer.Option(
         False,
         "--global",
-        help="(claude only) Remove the global convention from ~/.claude/.",
+        help="(claude, opencode) Remove the global convention from the agent's global config dir.",
     ),
 ) -> None:
     """Remove the blog convention from an agent's context file."""
@@ -418,8 +465,11 @@ def uninstall(
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(1)
 
-    if global_ and ai != "claude":
-        console.print(f"[red]--global is only supported for 'claude' right now (got {ai!r}).[/red]")
+    if global_ and agent.global_dir is None:
+        supported = ", ".join(sorted(k for k, a in AGENTS.items() if a.global_dir))
+        console.print(
+            f"[red]--global is only supported for: {supported} (got {ai!r}).[/red]"
+        )
         raise typer.Exit(1)
 
     root_dir = Path.home() if global_ else Path.cwd()
@@ -433,14 +483,14 @@ def uninstall(
 
     manifest = Manifest.load(manifest_path, root_dir)
 
-    # Remove convention from context file. Global installs live under
-    # ~/.claude/; also sweep the legacy home-root location from old versions.
+    # Remove convention from context file. Global installs live under the
+    # agent's global config dir (e.g. ~/.claude/, ~/.config/opencode/).
     primary_rel = (
-        f"{GLOBAL_CONTEXT_DIR_REL}/{agent.context_file}" if global_ else agent.context_file
+        f"{agent.global_dir}/{agent.context_file}" if global_ else agent.context_file
     )
     _remove_convention_from(root_dir / primary_rel, f"{ctx_display_prefix}{primary_rel}")
-    if global_:
-        # Sweep the legacy home-root location from old versions too.
+    if global_ and agent.key == "claude":
+        # Sweep the legacy home-root location (~/CLAUDE.md) from old versions.
         _remove_convention_from(
             root_dir / agent.context_file,
             f"{ctx_display_prefix}{agent.context_file}",
@@ -448,7 +498,7 @@ def uninstall(
         )
 
     # Remove any installed hooks recorded in the manifest
-    if manifest is not None and ai == "claude":
+    if manifest is not None and agent.supports_hooks:
         for hook in manifest.hooks:
             for action in _uninstall_claude_hook(root_dir, hook):
                 console.print(f"[green]{action}[/green]")
@@ -456,7 +506,7 @@ def uninstall(
     # Remove any installed slash commands recorded in the manifest
     if manifest is not None:
         for cmd in manifest.commands:
-            for action in _uninstall_claude_command(root_dir, cmd):
+            for action in _uninstall_agent_command(root_dir, cmd):
                 console.print(f"[green]{action}[/green]")
 
     # Clean up manifest
@@ -486,10 +536,18 @@ def list_agents() -> None:
     table.add_column("Key", style="cyan")
     table.add_column("Name")
     table.add_column("Context File", style="dim")
+    table.add_column("Extras", style="dim")
 
     # Group by context file for cleaner display
     for cfg in sorted(AGENTS.values(), key=lambda c: (c.context_file, c.name)):
-        table.add_row(cfg.key, cfg.name, cfg.context_file)
+        extras = []
+        if cfg.commands_dir:
+            extras.append("commands")
+        if cfg.global_dir:
+            extras.append("--global")
+        if cfg.supports_hooks:
+            extras.append("hooks")
+        table.add_row(cfg.key, cfg.name, cfg.context_file, ", ".join(extras) or "—")
 
     console.print(table)
 
@@ -525,6 +583,26 @@ def status() -> None:
             f"[bold]Blog:[/bold] [cyan]{blog_dir}/[/cyan] \u2014 "
             f"{entry_count} {noun}, most recent [green]{latest_entry}[/green]"
         )
+
+    # OKF (Open Knowledge Format) conformance \u2014 what `devlog migrate` would fix.
+    okf_plan = plan_migration(project_root, config)
+    if okf_plan.needed:
+        reasons: list[str] = []
+        n = len(okf_plan.entry_changes)
+        if n:
+            reasons.append(f"{n} entr{'y' if n == 1 else 'ies'} missing type/description")
+        if okf_plan.index_rename:
+            reasons.append(f"index is {okf_plan.current_index}, not {OKF_INDEX_FILE}")
+        if okf_plan.index_needs_stamp:
+            reasons.append("index missing okf_version")
+        if okf_plan.config_frontmatter_update:
+            reasons.append("config frontmatter missing type/description")
+        console.print(
+            f"[bold]OKF:[/bold] [yellow]not conformant[/yellow] \u2014 {'; '.join(reasons)}. "
+            "Run [cyan]devlog migrate[/cyan] (or [cyan]devlog install[/cyan])."
+        )
+    else:
+        console.print(f"[bold]OKF:[/bold] [green]v{OKF_VERSION} conformant[/green]")
 
     # Session coverage, recorded by the SessionEnd hook when installed.
     # Sessions newer than the latest entry are the convention's blind spot:
@@ -667,12 +745,177 @@ def index() -> None:
         raise typer.Exit(1)
 
     content, count = build_index(project_root, config)
-    index_path = blog_dir / config.get("index_file", "_index.md")
+    index_path = blog_dir / config.get("index_file", OKF_INDEX_FILE)
     index_path.write_text(content, encoding="utf-8")
     noun = "entry" if count == 1 else "entries"
     console.print(
         f"[green]Regenerated {config['blog_dir']}/{index_path.name}[/green] — {count} {noun}."
     )
+
+
+# ── Migrate command ──────────────────────────────────────────────────────
+
+
+def _git_mv(old: Path, new: Path) -> bool:
+    """Rename a file, preferring ``git mv`` to preserve history. Falls back to a
+    plain rename when git is unavailable or the file is untracked."""
+    try:
+        result = subprocess.run(
+            ["git", "mv", str(old), str(new)],
+            cwd=old.parent,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return True
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        old.rename(new)
+        return True
+    except OSError:
+        return False
+
+
+def _set_config_index_file(project_root: Path, new_value: str) -> bool:
+    """Rewrite the ``index_file`` value in .devlog/config.yaml in place,
+    preserving surrounding comments and formatting. Returns True if changed."""
+    cfg = project_root / ".devlog" / "config.yaml"
+    if not cfg.exists():
+        return False
+    text = cfg.read_text(encoding="utf-8")
+    new_text, n = re.subn(
+        r"(?m)^(\s*index_file\s*:\s*).*$",
+        lambda m: f'{m.group(1)}"{new_value}"',
+        text,
+    )
+    if n and new_text != text:
+        cfg.write_text(new_text, encoding="utf-8")
+        return True
+    return False
+
+
+# The `type` item inserted at the head of a config frontmatter list; matches the
+# shipped template so a migrated config reads identically to a fresh one.
+_CONFIG_TYPE_ITEM = (
+    "  - field: type\n"
+    "    example: '\"Devlog Entry\"  # OKF concept type — the one field "
+    "Open Knowledge Format requires'\n"
+)
+
+
+def _migrate_config_frontmatter(project_root: Path) -> bool:
+    """Bring .devlog/config.yaml's `frontmatter` list into OKF shape: rename the
+    `summary` field to `description` and prepend a `type` field if absent. Text
+    edits, so comments and formatting survive. Returns True if the file changed."""
+    cfg = project_root / ".devlog" / "config.yaml"
+    if not cfg.exists():
+        return False
+    text = cfg.read_text(encoding="utf-8")
+    original = text
+    text = re.sub(r"(?m)^(\s*-\s*field:\s*)summary\b", r"\1description", text)
+    if not re.search(r"(?m)^\s*-\s*field:\s*type\b", text):
+        text = re.sub(
+            r"(?m)^(frontmatter:[ \t]*\n)",
+            lambda m: m.group(1) + _CONFIG_TYPE_ITEM,
+            text,
+            count=1,
+        )
+    if text != original:
+        cfg.write_text(text, encoding="utf-8")
+        return True
+    return False
+
+
+def _apply_migration(project_root: Path, config: dict[str, Any], plan: MigrationPlan) -> None:
+    """Execute a MigrationPlan: rewrite entry frontmatter, rename + stamp the
+    index, and update .devlog/config.yaml. Mirrors plan_migration's decisions."""
+    blog_dir = project_root / config["blog_dir"]
+    for name, _changes in plan.entry_changes:
+        md = blog_dir / name
+        try:
+            new_text, _ = migrate_entry_text(md.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        md.write_text(new_text, encoding="utf-8")
+
+    current_index_path = blog_dir / plan.current_index
+    target_path = blog_dir / OKF_INDEX_FILE
+    if plan.index_rename:
+        if target_path.exists():
+            current_index_path.unlink()  # target already present — drop the stale index
+        else:
+            _git_mv(current_index_path, target_path)
+    # Regenerate at the OKF name (adds okf_version, refreshes the list).
+    content, _ = build_index(project_root, {**config, "index_file": OKF_INDEX_FILE})
+    target_path.write_text(content, encoding="utf-8")
+    if plan.config_update:
+        _set_config_index_file(project_root, OKF_INDEX_FILE)
+    if plan.config_frontmatter_update:
+        _migrate_config_frontmatter(project_root)
+
+
+def _report_migration(plan: MigrationPlan, *, check: bool) -> None:
+    """Render a MigrationPlan as a rich tree."""
+    verb = "Would migrate" if check else "Migrated"
+    tree = Tree(f"[bold green]{verb} blog to OKF v{OKF_VERSION}[/bold green]")
+    if plan.entry_changes:
+        entries_node = tree.add(f"[green]{len(plan.entry_changes)} entries[/green]")
+        for name, changes in plan.entry_changes:
+            entries_node.add(f"[dim]{name}[/dim] — {', '.join(changes)}")
+    if plan.unchanged:
+        tree.add(f"[dim]{plan.unchanged} entries already conformant[/dim]")
+    if plan.index_rename:
+        arrow = "would be renamed to" if check else "renamed to"
+        tree.add(f"index: [dim]{plan.current_index}[/dim] {arrow} [green]{OKF_INDEX_FILE}[/green]")
+    else:
+        word = "would stamp" if check else "stamped"
+        tree.add(f"index: {word} [green]{OKF_INDEX_FILE}[/green] with okf_version")
+    if plan.config_update:
+        word = "would set" if check else "set"
+        tree.add(f"config: {word} [green]index_file: {OKF_INDEX_FILE}[/green]")
+    if plan.config_frontmatter_update:
+        word = "would update" if check else "updated"
+        tree.add(f"config: {word} [green]frontmatter[/green] (type + description)")
+    console.print()
+    console.print(tree)
+    console.print()
+
+
+@app.command()
+def migrate(
+    check: bool = typer.Option(
+        False, "--check", help="Show what would change without writing anything."
+    ),
+) -> None:
+    """Bring an existing blog up to Open Knowledge Format (OKF) conformance.
+
+    Idempotent and safe to re-run. For every entry it adds the required `type`
+    field and renames `summary:` to OKF's canonical `description:`; it renames
+    the index to the reserved `index.md`, stamps it with `okf_version`, and
+    updates `.devlog/config.yaml` to match."""
+    project_root = Path.cwd()
+    config = load_config(project_root)
+    blog_dir = project_root / config["blog_dir"]
+    if not blog_dir.is_dir():
+        console.print(
+            f"[red]No {config['blog_dir']}/ directory here. Run [cyan]devlog init[/cyan] first.[/red]"
+        )
+        raise typer.Exit(1)
+
+    plan = plan_migration(project_root, config)
+    if not plan.needed:
+        console.print(f"[green]Blog is already OKF v{OKF_VERSION} conformant.[/green] Nothing to migrate.")
+        return
+    if not check:
+        _apply_migration(project_root, config, plan)
+    _report_migration(plan, check=check)
+    if check:
+        console.print("Run [cyan]devlog migrate[/cyan] to apply, then "
+                      "[cyan]devlog install --ai <key>[/cyan] to refresh the convention block.")
+    else:
+        console.print("Done. Run [cyan]devlog install --ai <key>[/cyan] to refresh the "
+                      "convention block, and commit the changes.")
 
 
 # ── Version command ──────────────────────────────────────────────────────
@@ -810,16 +1053,18 @@ def upgrade(
     project_root = Path.cwd()
     method = _detect_install_method()
     project_agents = _installed_project_agents(project_root)
-    global_agent = "claude" if _global_install_detected(get_agent("claude")) else None
+    global_agents = [
+        key for key, cfg in AGENTS.items()
+        if cfg.global_dir and _global_install_detected(cfg)
+    ]
 
     def targets_phrase() -> str:
         parts = list(project_agents)
-        if global_agent:
-            parts.append(f"{global_agent} (global)")
+        parts.extend(f"{key} (global)" for key in global_agents)
         return ", ".join(parts) if parts else "nothing"
 
     def targets_count() -> int:
-        return len(project_agents) + (1 if global_agent else 0)
+        return len(project_agents) + len(global_agents)
 
     console.print(LOGO)
     console.print(f"  devlog {__version__}  [dim]({method.display})[/dim]")
@@ -900,14 +1145,15 @@ def upgrade(
         for key in project_agents:
             if _run_resync(exe, key, global_mode=False) != 0:
                 failures += 1
-        if global_agent and _run_resync(exe, global_agent, global_mode=True) != 0:
-            failures += 1
+        for key in global_agents:
+            if _run_resync(exe, key, global_mode=True) != 0:
+                failures += 1
     else:
         # --project-only: this process already is the installed tool.
         for key in project_agents:
             _install_local(get_agent(key), with_hook=False)
-        if global_agent:
-            _install_global(get_agent(global_agent), with_hook=False)
+        for key in global_agents:
+            _install_global(get_agent(key), with_hook=False)
 
     console.print()
     noun = "agent" if targets_count() == 1 else "agents"
@@ -1035,14 +1281,15 @@ def _global_install_detected(agent: AgentConfig) -> bool:
     """True when a devlog global install for this agent is present and its
     convention block is actually in place (manifest alone isn't enough — the
     user may have removed the file)."""
+    if agent.global_dir is None:
+        return False
     home = Path.home()
     manifest_path = home / ".devlog" / "manifests" / f"{agent.key}.manifest.json"
     if not manifest_path.exists():
         return False
-    candidates = (
-        home / GLOBAL_CONTEXT_DIR_REL / agent.context_file,
-        home / agent.context_file,  # legacy pre-migration location
-    )
+    candidates = [home / agent.global_dir / agent.context_file]
+    if agent.key == "claude":
+        candidates.append(home / agent.context_file)  # legacy pre-migration location
     for path in candidates:
         try:
             if path.exists() and _SENTINEL_START_MARKER in path.read_text(encoding="utf-8"):
@@ -1081,9 +1328,6 @@ def _remove_convention_from(ctx_path: Path, display: str, *, quiet_if_absent: bo
 # ── Claude Code Stop hook helpers ────────────────────────────────────────
 
 CLAUDE_SETTINGS_REL = ".claude/settings.json"
-# Global installs write the convention under ~/.claude/ (Claude Code's user
-# memory), not the home directory root (which only loads via ancestor traversal).
-GLOBAL_CONTEXT_DIR_REL = ".claude"
 STOP_HOOK_SCRIPT_REL = ".devlog/hooks/stop.py"
 SESSION_HOOK_SCRIPT_REL = ".devlog/hooks/session_end.py"
 # The (event, script) pairs that --with-hook installs: the Stop reminder and
@@ -1319,18 +1563,19 @@ def _uninstall_claude_hook(project_root: Path, hook_record: dict[str, Any]) -> l
     return actions
 
 
-# ── Claude Code slash command helpers ────────────────────────────────────
-
-CLAUDE_COMMANDS_DIR_REL = ".claude/commands"
+# ── Slash command helpers ────────────────────────────────────────────────
 
 
-def _install_claude_commands(
+def _install_agent_commands(
     root_dir: Path,
+    commands_dir_rel: str,
     previous: list[dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    """Copy bundled slash command templates into .claude/commands/.
+    """Copy bundled slash command templates into the agent's commands dir
+    (e.g. .claude/commands/, .opencode/commands/).
 
-    root_dir is the project root (per-project) or Path.home() (global).
+    root_dir is the project root (per-project) or Path.home() (global);
+    commands_dir_rel is the destination directory relative to root_dir.
     `previous` is the prior manifest's commands list (used to reconcile orphans
     from removed/renamed templates and to detect user customizations).
 
@@ -1343,7 +1588,7 @@ def _install_claude_commands(
                            template no longer exists in this version.
     """
     src_dir = _templates_dir() / "commands"
-    dst_dir = root_dir / CLAUDE_COMMANDS_DIR_REL
+    dst_dir = root_dir / commands_dir_rel
 
     previous = previous or []
 
@@ -1365,7 +1610,7 @@ def _install_claude_commands(
         dst = dst_dir / src.name
         new_text = src.read_text(encoding="utf-8")
         new_hash = Manifest._sha256(new_text)
-        rel = f"{CLAUDE_COMMANDS_DIR_REL}/{src.name}"
+        rel = f"{commands_dir_rel}/{src.name}"
 
         prev = prev_by_name.get(src.stem)
         if dst.exists() and prev and prev.get("sha256"):
@@ -1425,7 +1670,7 @@ def _safe_file_hash(path: Path) -> str | None:
         return None
 
 
-def _uninstall_claude_command(root_dir: Path, cmd_record: dict[str, Any]) -> list[str]:
+def _uninstall_agent_command(root_dir: Path, cmd_record: dict[str, Any]) -> list[str]:
     """Remove a previously-installed slash command. Returns a list of human-readable
     actions taken (for display).
 

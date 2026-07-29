@@ -159,6 +159,17 @@ class TestThinConvention:
         text = generate_thin_convention(config)
         assert "docs/journal/" in text
 
+    def test_opencode_variant_points_at_its_global_file(self):
+        text = generate_thin_convention(
+            DEFAULT_CONFIG,
+            agent_key="opencode",
+            global_context_path="~/.config/opencode/AGENTS.md",
+        )
+        assert "~/.config/opencode/AGENTS.md" in text
+        assert "global AGENTS.md" in text
+        assert "devlog install --ai opencode --full" in text
+        assert "CLAUDE.md" not in text
+
 
 # ── Convention injection / removal ───────────────────────────────────────
 
@@ -241,7 +252,7 @@ class TestDiscoverTags:
     def test_skips_index_file(self, installed_project: Path):
         config = load_config(installed_project)
         tags = discover_tags(installed_project, config)
-        # _index.md has no frontmatter; should not crash.
+        # the index file is skipped by name; should not crash.
         assert isinstance(tags, list)
 
     def test_no_blog_dir(self, project_dir: Path):

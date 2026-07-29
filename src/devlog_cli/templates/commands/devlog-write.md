@@ -11,7 +11,7 @@ If the argument is empty or too vague to write a meaningful entry, ask one clari
 Before doing anything else, resolve project paths from `.devlog/config.yaml` if it exists:
 
 - `<blog_dir>` is the `blog_dir` value (default: `blog`).
-- `<index_file>` is the `index_file` value (default: `_index.md`).
+- `<index_file>` is the `index_file` value (default: `index.md`).
 - `<media_dir>` is the `media_dir` value (default: `blog/media`).
 
 Use these resolved paths for every reference below. The defaults are only the fallback — a project that customizes its config takes precedence.
@@ -32,7 +32,7 @@ After bootstrapping, re-read `.devlog/config.yaml` so the path resolution above 
 
 1. Read `.devlog/config.yaml` to get this project's current sections, voice guidelines, tags, and frontmatter fields. The convention may be customized; defer to the config over your prior assumptions.
 2. Read `.devlog/learned.md` for project-specific vocabulary, entity names, recurring themes, and open threads. Reuse established terms.
-3. Read `<blog_dir>/<index_file>` (e.g. `blog/_index.md`) and the 1–2 most recent entries to match the established voice, structure, and level of detail. Avoid repeating points already covered there.
+3. Read `<blog_dir>/<index_file>` (e.g. `blog/index.md`) and the 1–2 most recent entries to match the established voice, structure, and level of detail. Avoid repeating points already covered there.
 
 ## Step 2 — Compute filename and timestamp
 

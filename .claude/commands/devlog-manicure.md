@@ -9,7 +9,7 @@ Manicure the devlog. This is a multi-phase command — work through each phase i
 Before doing anything else, resolve the blog directory and index file from `.devlog/config.yaml` if it exists:
 
 - `<blog_dir>` is the `blog_dir` value (default: `blog`).
-- `<index_file>` is the `index_file` value (default: `_index.md`).
+- `<index_file>` is the `index_file` value (default: `index.md`).
 
 Use these resolved paths for every reference below.
 

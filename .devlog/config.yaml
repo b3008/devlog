@@ -4,7 +4,7 @@
 blog_dir: blog
 media_dir: blog/media
 file_pattern: "YYYY-MM-DD-NN-slug.md"
-index_file: "_index.md"
+index_file: "index.md"
 
 # Sections to include in each blog entry
 sections:
@@ -51,6 +51,8 @@ tags:
 
 # Frontmatter fields for blog entries
 frontmatter:
+  - field: type
+    example: '"Devlog Entry"  # OKF concept type — the one field Open Knowledge Format requires'
   - field: title
     example: '"Short descriptive title"'
   - field: date
@@ -59,7 +61,7 @@ frontmatter:
     example: "YYYY-MM-DDTHH:MM:SS  # ISO 8601 local time, captured when the entry is written"
   - field: tags
     example: "[relevant, tags, from-list-below]"
-  - field: summary
+  - field: description
     example: '"One-sentence summary of what was accomplished and why it matters."'
 
 # Supporting-artifact configuration (agent-feasible evidence, not just screenshots)

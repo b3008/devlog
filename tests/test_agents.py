@@ -20,6 +20,26 @@ class TestAgentRegistry:
         agent = get_agent("gemini")
         assert agent.context_file == "GEMINI.md"
 
+    def test_claude_capabilities(self):
+        agent = get_agent("claude")
+        assert agent.commands_dir == ".claude/commands"
+        assert agent.global_dir == ".claude"
+        assert agent.supports_hooks is True
+
+    def test_opencode_registered_with_capabilities(self):
+        agent = get_agent("opencode")
+        assert agent.name == "OpenCode"
+        assert agent.context_file == "AGENTS.md"
+        assert agent.commands_dir == ".opencode/commands"
+        assert agent.global_dir == ".config/opencode"
+        assert agent.supports_hooks is False
+
+    def test_plain_agents_have_no_extras(self):
+        agent = get_agent("codex")
+        assert agent.commands_dir is None
+        assert agent.global_dir is None
+        assert agent.supports_hooks is False
+
     def test_agents_md_agents(self):
         """All agents using AGENTS.md should point to that file."""
         agents_md_keys = [k for k, v in AGENTS.items() if v.context_file == "AGENTS.md"]

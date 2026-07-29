@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Assessment: how useful is devlog for agent-coded codebases?"
 date: 2026-06-11
 timestamp: 2026-06-11T22:37:48
 tags: [research, architecture, ux]
-summary: "A full-system assessment from an unusual vantage point — the assessing agent was running inside devlog's own install — yielding eleven findings (including a likely root cause for the Stop hook's red-box problem) and a tiered roadmap toward 'institutional memory for agents'."
+description: "A full-system assessment from an unusual vantage point — the assessing agent was running inside devlog's own install — yielding eleven findings (including a likely root cause for the Stop hook's red-box problem) and a tiered roadmap toward 'institutional memory for agents'."
 ---
 
 ## What changed

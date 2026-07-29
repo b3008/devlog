@@ -1,8 +1,9 @@
 ---
+type: "Devlog Entry"
 title: "Squashing the repo history to one commit"
 date: 2026-04-16
 tags: [infrastructure]
-summary: "Four working-day commits collapsed into a single 'Initial release' commit before anyone clones the repo."
+description: "Four working-day commits collapsed into a single 'Initial release' commit before anyone clones the repo."
 ---
 
 ## What changed

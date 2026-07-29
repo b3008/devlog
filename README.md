@@ -35,7 +35,7 @@ grows automatically, in the agent's own voice.
 - [Quickstart](#quickstart)
 - [What actually happens](#what-actually-happens)
 - [Commands](#commands)
-- [Slash commands (Claude Code)](#slash-commands-claude-code)
+- [Slash commands (Claude Code, OpenCode)](#slash-commands-claude-code-opencode)
 - [Adaptive convention](#adaptive-convention)
 - [Supported agents](#supported-agents)
 - [How it works](#how-it-works)
@@ -138,18 +138,21 @@ uv tool install git+https://github.com/b3008/devlog.git
 devlog init && devlog install --ai claude
 ```
 
-### One-time global setup (Claude Code)
+### One-time global setup (Claude Code, OpenCode)
 
 Install once and every project gets a blog — no per-project install needed:
 
 ```bash
 devlog install --ai claude --global --with-hook
+# or, for OpenCode (hooks are claude-only):
+devlog install --ai opencode --global
 ```
 
-This injects the convention into `~/.claude/CLAUDE.md` with self-bootstrapping
-instructions: the agent creates `blog/`, `.devlog/`, and `learned.md` on its
-first entry in any project. Per-project customization is still available via
-`devlog init` + config edits in any repo.
+This injects the convention into the agent's global context file
+(`~/.claude/CLAUDE.md` for Claude Code, `~/.config/opencode/AGENTS.md` for
+OpenCode) with self-bootstrapping instructions: the agent creates `blog/`,
+`.devlog/`, and `learned.md` on its first entry in any project. Per-project
+customization is still available via `devlog init` + config edits in any repo.
 
 Running a per-project `devlog install` on top of a global install injects a
 **thin pointer block** instead of duplicating the full convention (which
@@ -180,10 +183,11 @@ From then on, the agent writes entries like this without being asked:
 
 ```markdown
 ---
+type: "Devlog Entry"
 title: "Tag vocabulary now self-updates"
 date: 2026-04-16
 tags: [feature, cli, ux]
-summary: "devlog install now folds tags from existing entries into the rendered vocabulary."
+description: "devlog install now folds tags from existing entries into the rendered vocabulary."
 ---
 
 ## What changed
@@ -199,18 +203,21 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 ...
 ```
 
+Entries are [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) (OKF) concept documents — plain markdown with YAML frontmatter whose one required field is `type`. The `blog/` directory is an OKF bundle: `blog/index.md` is the reserved bundle index (stamped with `okf_version`), and entries cross-link through ordinary markdown links. That makes a devlog readable by any OKF-aware tool or agent, not just this one. Already have a pre-OKF blog? Run [`devlog migrate`](#commands) — it's automatic on your next `devlog install`.
+
 <br>
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `devlog init [--name NAME]` | Scaffold `.devlog/`, `blog/`, `blog/media/`, `blog/_index.md`, and `.devlog/learned.md`. |
+| `devlog init [--name NAME]` | Scaffold `.devlog/`, `blog/`, `blog/media/`, `blog/index.md`, and `.devlog/learned.md`. |
 | `devlog install --ai <key>` | Inject the convention into the agent's context file. Auto-runs `init` if needed. |
-| `devlog install --ai claude --global` | Install into `~/.claude/CLAUDE.md` so the convention applies to every project. |
+| `devlog install --ai <key> --global` | Install into the agent's global config (`~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`) so the convention applies to every project. Supported: `claude`, `opencode`. |
 | `devlog uninstall --ai <key>` | Remove the convention section and manifest. |
-| `devlog uninstall --ai claude --global` | Remove the global convention from `~/.claude/`. |
-| `devlog index` | Regenerate `blog/_index.md` from entry frontmatter (newest first). |
+| `devlog uninstall --ai <key> --global` | Remove the global convention from the agent's global config dir. |
+| `devlog index` | Regenerate `blog/index.md` from entry frontmatter (newest first). |
+| `devlog migrate` | Bring an existing blog up to [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf) conformance (adds `type`, renames `summary`→`description`, renames the index to `index.md`, stamps `okf_version`). Idempotent; `--check` previews. Also runs automatically during `devlog install`. |
 | `devlog list` | List all supported agents. |
 | `devlog status` | Show which agents currently have the convention active. |
 | `devlog upgrade` | Upgrade the devlog tool, then resync this repo's convention to it. `--check` previews; `--project-only` / `--tool-only` scope it. |
@@ -218,12 +225,15 @@ summary: "devlog install now folds tags from existing entries into the rendered 
 
 <br>
 
-## Slash commands (Claude Code)
+## Slash commands (Claude Code, OpenCode)
 
 Installing for Claude Code also drops four slash commands into
 `.claude/commands/` (or `~/.claude/commands/` for `--global` installs).
+Installing for OpenCode drops the same four into `.opencode/commands/`
+(globally: `~/.config/opencode/commands/`) — the command format (markdown
+body, `description` frontmatter, `$ARGUMENTS` placeholder) is shared.
 They give you direct, on-demand control over the blog from inside any
-Claude Code session — no flag needed, they ship by default.
+session — no flag needed, they ship by default.
 
 In a project that hasn't been initialized yet, `/devlog-write` will
 bootstrap the scaffolding (`.devlog/`, `blog/`, `learned.md`) on first
@@ -234,8 +244,8 @@ gracefully if the project hasn't been scaffolded.
 
 | Command | What it does |
 | --- | --- |
-| `/devlog-catchup` | Reads `blog/_index.md`, the 5 most recent entries, and `.devlog/learned.md`, then returns a structured project briefing — project arc, recent work, open threads, glossary highlights. Use at the start of a session to load context. |
-| `/devlog-write <topic>` | Writes a new entry about the given topic. Computes the next per-day index `NN` and ISO timestamp, derives a kebab-case slug, follows your project's convention (sections, voice, tags from `.devlog/config.yaml`), and updates `blog/_index.md`. Refuses vague input rather than fabricating. |
+| `/devlog-catchup` | Reads `blog/index.md`, the 5 most recent entries, and `.devlog/learned.md`, then returns a structured project briefing — project arc, recent work, open threads, glossary highlights. Use at the start of a session to load context. |
+| `/devlog-write <topic>` | Writes a new entry about the given topic. Computes the next per-day index `NN` and ISO timestamp, derives a kebab-case slug, follows your project's convention (sections, voice, tags from `.devlog/config.yaml`), and updates `blog/index.md`. Refuses vague input rather than fabricating. |
 | `/devlog-manicure [topic]` | Four-phase audit of past entries: categorizes findings (followed-through, revised, discarded, drifted, etc.), writes a recap entry, then proposes wipes or dated blockquote annotations (`> **Update YYYY-MM-DD**: …`) for you to approve before applying. Optional topic argument scopes the manicure to a single thread. |
 | `/devlog-upgrade [flags]` | Upgrades the `devlog` tool to the latest from GitHub, then resyncs this repo's convention to it. A thin driver over the two-layer [`devlog upgrade`](#upgrading) CLI: it previews with `--check`, applies when the install is self-upgradeable, and falls back to the right manual step (e.g. `git pull` for a source checkout) when it isn't. Scope with `--tool-only` / `--project-only`. |
 
@@ -338,22 +348,23 @@ devlog install --ai claude to resync (customized files are preserved).
 
 ## Supported agents
 
-Three agents have dedicated context files:
+Four agents get first-class integrations:
 
-| Key | Agent | Context file |
-| --- | --- | --- |
-| `claude` | Claude Code | `CLAUDE.md` |
-| `copilot` | GitHub Copilot | `.github/copilot-instructions.md` |
-| `gemini` | Gemini CLI | `GEMINI.md` |
+| Key | Agent | Context file | Extras |
+| --- | --- | --- | --- |
+| `claude` | Claude Code | `CLAUDE.md` | slash commands, `--global`, `--with-hook` |
+| `opencode` | OpenCode | `AGENTS.md` | slash commands, `--global` |
+| `copilot` | GitHub Copilot | `.github/copilot-instructions.md` | — |
+| `gemini` | Gemini CLI | `GEMINI.md` | — |
 
 <details>
-<summary><strong>24 more agents</strong> use the shared <code>AGENTS.md</code> standard — click to expand</summary>
+<summary><strong>23 more agents</strong> use the shared <code>AGENTS.md</code> standard — click to expand</summary>
 
 <br>
 
 `codex` · `cursor-agent` · `kimi` · `qwen` · `agy` · `trae` · `roo` ·
 `bob` · `auggie` · `kilocode` · `windsurf` · `codebuddy` · `vibe` ·
-`amp` · `kiro-cli` · `tabnine` · `goose` · `pi` · `opencode` ·
+`amp` · `kiro-cli` · `tabnine` · `goose` · `pi` ·
 `forge` · `shai` · `iflow` · `junie` · `qodercli`
 
 </details>
@@ -385,14 +396,14 @@ your-project/
 │   ├── sessions.jsonl           # session coverage log (gitignored)
 │   └── manifests/
 │       └── claude.manifest.json # install tracking
-├── .claude/
-│   └── commands/                # slash commands (claude installs only)
+├── .claude/                     # claude installs (.opencode/ for opencode)
+│   └── commands/                # slash commands
 │       ├── devlog-catchup.md
 │       ├── devlog-write.md
 │       ├── devlog-manicure.md
 │       └── devlog-upgrade.md
-├── blog/
-│   ├── _index.md
+├── blog/                        # OKF bundle
+│   ├── index.md                 # bundle index (okf_version stamp)
 │   ├── 2026-04-16-01-first-entry.md
 │   └── media/
 └── CLAUDE.md                    # convention injected between sentinels

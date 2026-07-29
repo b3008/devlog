@@ -2,7 +2,7 @@
 description: Upgrade the devlog tool to the latest version from GitHub, then resync this repo's convention to it. Pass --check to preview, or --tool-only / --project-only to scope.
 ---
 
-Upgrade devlog to the latest version and resync this project's convention to it. This drives the `devlog upgrade` CLI command, which works in two layers: it upgrades the installed `devlog` tool from GitHub, then re-runs `devlog install` for every agent configured in this repo (and the global Claude install, if one is detected) so the freshly shipped convention, hooks, and slash commands are what land on disk.
+Upgrade devlog to the latest version and resync this project's convention to it. This drives the `devlog upgrade` CLI command, which works in two layers: it upgrades the installed `devlog` tool from GitHub, then re-runs `devlog install` for every agent configured in this repo (and any global installs, if detected) so the freshly shipped convention, hooks, and slash commands are what land on disk.
 
 Arguments (may be empty): $ARGUMENTS
 
@@ -36,7 +36,7 @@ devlog upgrade --check <forwarded flags>
 Read its output. Install-method-aware, it reports:
 
 - whether the tool can self-upgrade and the exact command it would run (e.g. `uv tool upgrade devlog`), **or** a warning that it can't — because devlog is running from a source checkout, an ephemeral `uvx` invocation, or an unrecognized install; and
-- which agents it would resync (per-project agents recorded in `.devlog/manifests/`, plus `claude (global)` if a global install is detected).
+- which agents it would resync (per-project agents recorded in `.devlog/manifests/`, plus `<agent> (global)` for any global installs detected).
 
 Relay the plan to the user in a line or two.
 

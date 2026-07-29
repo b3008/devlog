@@ -18,7 +18,7 @@ class TestInit:
         assert result.exit_code == 0
         assert (project_dir / ".devlog" / "config.yaml").exists()
         assert (project_dir / ".devlog" / "learned.md").exists()
-        assert (project_dir / "blog" / "_index.md").exists()
+        assert (project_dir / "blog" / "index.md").exists()
         assert (project_dir / "blog" / "media").is_dir()
 
     def test_creates_devlog_gitignore(self, project_dir: Path):
@@ -36,7 +36,7 @@ class TestInit:
 
     def test_index_has_project_name(self, project_dir: Path):
         runner.invoke(app, ["init", "--name", "My Project"])
-        content = (project_dir / "blog" / "_index.md").read_text()
+        content = (project_dir / "blog" / "index.md").read_text()
         assert "My Project" in content
 
     def test_idempotent(self, project_dir: Path):
@@ -220,7 +220,7 @@ class TestSlashCommands:
         cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
         assert cmd_file.exists()
         body = cmd_file.read_text(encoding="utf-8")
-        assert "blog/_index.md" in body
+        assert "blog/index.md" in body
         assert "learned.md" in body
 
     def test_write_command_file_created(self, initialized_project: Path):
@@ -359,7 +359,7 @@ class TestSlashCommands:
     def test_install_passthrough_when_templates_missing(self, initialized_project: Path, monkeypatch):
         """If templates/commands/ is missing (packaging error / incomplete checkout),
         reinstall must NOT delete previously-tracked commands as orphans."""
-        from devlog_cli import _install_claude_commands
+        from devlog_cli import _install_agent_commands
 
         runner.invoke(app, ["install", "--ai", "claude"])
         cmd_file = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
@@ -372,7 +372,9 @@ class TestSlashCommands:
         broken_root.mkdir()
         monkeypatch.setattr("devlog_cli._templates_dir", lambda: broken_root)
 
-        records, preserved, orphans = _install_claude_commands(initialized_project, previous)
+        records, preserved, orphans = _install_agent_commands(
+            initialized_project, ".claude/commands", previous
+        )
         assert records == previous  # passthrough preserves the prior manifest exactly
         assert preserved == []
         assert orphans == []
@@ -453,6 +455,101 @@ class TestThinLocalBlock:
         runner.invoke(app, ["install", "--ai", "claude"])
         content = (initialized_project / "CLAUDE.md").read_text(encoding="utf-8")
         assert "### How to write an entry" in content
+
+
+class TestOpencodeInstall:
+    """OpenCode gets the full install surface: AGENTS.md injection, custom
+    commands in .opencode/commands/, and a --global install under
+    ~/.config/opencode/. Hooks stay claude-only."""
+
+    def test_injects_agents_md(self, initialized_project: Path):
+        result = runner.invoke(app, ["install", "--ai", "opencode"])
+        assert result.exit_code == 0
+        content = (initialized_project / "AGENTS.md").read_text(encoding="utf-8")
+        assert _SENTINEL_START_MARKER in content
+        assert "### How to write an entry" in content
+
+    def test_commands_installed(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "opencode"])
+        cmd_dir = initialized_project / ".opencode" / "commands"
+        names = {p.name for p in cmd_dir.glob("*.md")}
+        assert names == {
+            "devlog-catchup.md",
+            "devlog-write.md",
+            "devlog-manicure.md",
+            "devlog-upgrade.md",
+        }
+
+    def test_manifest_records_opencode_command_paths(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "opencode"])
+        data = json.loads(
+            (initialized_project / ".devlog" / "manifests" / "opencode.manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        paths = {c["path"] for c in data["commands"]}
+        assert ".opencode/commands/devlog-catchup.md" in paths
+        assert all(p.startswith(".opencode/commands/") for p in paths)
+
+    def test_with_hook_rejected(self, initialized_project: Path):
+        result = runner.invoke(app, ["install", "--ai", "opencode", "--with-hook"])
+        assert result.exit_code == 1
+        assert "only supported for" in result.output
+
+    def test_no_hook_tip(self, initialized_project: Path):
+        result = runner.invoke(app, ["install", "--ai", "opencode"])
+        assert "--with-hook" not in result.output
+
+    def test_global_install(self, initialized_project: Path, isolated_home: Path):
+        result = runner.invoke(app, ["install", "--ai", "opencode", "--global"])
+        assert result.exit_code == 0
+        ctx = isolated_home / ".config" / "opencode" / "AGENTS.md"
+        assert ctx.exists()
+        content = ctx.read_text(encoding="utf-8")
+        assert _SENTINEL_START_MARKER in content
+        assert "First-time setup" in content  # global mode self-bootstraps
+        assert (isolated_home / ".config" / "opencode" / "commands" / "devlog-catchup.md").exists()
+        # No hook artifacts for opencode.
+        assert not (isolated_home / ".claude" / "settings.json").exists()
+
+    def test_thin_block_when_global_installed(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "opencode", "--global"])
+        result = runner.invoke(app, ["install", "--ai", "opencode"])
+        assert result.exit_code == 0
+        content = (initialized_project / "AGENTS.md").read_text(encoding="utf-8")
+        assert "~/.config/opencode/AGENTS.md" in content
+        assert "devlog install --ai opencode --full" in content
+        assert "### How to write an entry" not in content
+        assert "thin project block" in result.output
+
+    def test_full_flag_overrides_detection(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "opencode", "--global"])
+        runner.invoke(app, ["install", "--ai", "opencode", "--full"])
+        content = (initialized_project / "AGENTS.md").read_text(encoding="utf-8")
+        assert "### How to write an entry" in content
+
+    def test_uninstall_removes_commands(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "opencode"])
+        cmd_file = initialized_project / ".opencode" / "commands" / "devlog-catchup.md"
+        assert cmd_file.exists()
+        runner.invoke(app, ["uninstall", "--ai", "opencode"])
+        assert not cmd_file.exists()
+        assert not (initialized_project / ".opencode").exists()
+        assert not (initialized_project / "AGENTS.md").exists()
+
+    def test_global_uninstall(self, initialized_project: Path, isolated_home: Path):
+        runner.invoke(app, ["install", "--ai", "opencode", "--global"])
+        result = runner.invoke(app, ["uninstall", "--ai", "opencode", "--global"])
+        assert result.exit_code == 0
+        assert not (isolated_home / ".config" / "opencode" / "AGENTS.md").exists()
+        assert not (
+            isolated_home / ".config" / "opencode" / "commands" / "devlog-catchup.md"
+        ).exists()
+
+    def test_global_rejected_for_plain_agents_md_agent(self, initialized_project: Path):
+        result = runner.invoke(app, ["install", "--ai", "codex", "--global"])
+        assert result.exit_code == 1
+        assert "only supported for" in result.output
 
 
 class TestUninstall:
@@ -756,7 +853,7 @@ class TestIndexCommand:
         result = runner.invoke(app, ["index"])
         assert result.exit_code == 0
         assert "2 entries" in result.output
-        content = (installed_project / "blog" / "_index.md").read_text(encoding="utf-8")
+        content = (installed_project / "blog" / "index.md").read_text(encoding="utf-8")
         assert "[Newer entry](2026-05-01-01-newer.md)" in content
         assert content.index("2026-05-01-01-newer.md") < content.index("2026-04-16-test-entry.md")
         assert "Generated by `devlog index`" in content
@@ -772,14 +869,15 @@ class TestIndexCommand:
             encoding="utf-8",
         )
         runner.invoke(app, ["index"])
-        content = (blog / "_index.md").read_text(encoding="utf-8")
+        content = (blog / "index.md").read_text(encoding="utf-8")
         assert content.index("[Evening]") < content.index("[Morning]")
 
     def test_preserves_existing_heading(self, installed_project: Path, sample_entry: Path):
         runner.invoke(app, ["index"])
-        content = (installed_project / "blog" / "_index.md").read_text(encoding="utf-8")
-        # Heading scaffolded by init (project name) survives regeneration.
-        assert content.splitlines()[0] == "# Test Project — Development Blog"
+        content = (installed_project / "blog" / "index.md").read_text(encoding="utf-8")
+        # The okf_version frontmatter leads; the init-scaffolded heading survives.
+        assert 'okf_version: "0.1"' in content
+        assert "# Test Project — Development Blog" in content
 
     def test_entry_without_frontmatter_falls_back_to_filename(
         self, installed_project: Path
@@ -789,7 +887,7 @@ class TestIndexCommand:
         )
         result = runner.invoke(app, ["index"])
         assert result.exit_code == 0
-        content = (installed_project / "blog" / "_index.md").read_text(encoding="utf-8")
+        content = (installed_project / "blog" / "index.md").read_text(encoding="utf-8")
         assert "[2026-03-03-bare](2026-03-03-bare.md)" in content
         assert "- 2026-03-03 —" in content
 
