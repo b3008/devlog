@@ -214,6 +214,7 @@ Entries are [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowl
 | `devlog init [--name NAME]` | Scaffold `.devlog/`, `blog/`, `blog/media/`, `blog/index.md`, and `.devlog/learned.md`. |
 | `devlog install --ai <key>` | Inject the convention into the agent's context file. Auto-runs `init` if needed. |
 | `devlog install --ai <key> --global` | Install into the agent's global config (`~/.claude/CLAUDE.md`, `~/.config/opencode/AGENTS.md`) so the convention applies to every project. Supported: `claude`, `opencode`. |
+| `devlog install --ai <key> --force` | Overwrite locally-edited hooks and slash commands with the shipped templates. Untouched files resync on their own; use this to discard an edit you know is obsolete. Never deletes files. |
 | `devlog uninstall --ai <key>` | Remove the convention section and manifest. |
 | `devlog uninstall --ai <key> --global` | Remove the global convention from the agent's global config dir. |
 | `devlog index` | Regenerate `blog/index.md` from entry frontmatter (newest first). |
@@ -304,7 +305,10 @@ config):
 
 Reinstalls are idempotent and carry existing hooks forward even without
 the flag (refreshing stale scripts); locally-customized hook scripts are
-detected by hash and preserved. When both global and per-project hooks
+detected by hash and preserved — including across later template changes,
+since the manifest records what devlog last wrote separately from what is
+on disk. Pass `--force` to discard a local edit you know is obsolete; it
+says which files it overwrote, and never deletes. When both global and per-project hooks
 are installed, the global instance defers to the project's at runtime —
 one reminder, one session record. `devlog uninstall --ai claude` removes
 the hook entries, deletes the scripts (unless customized), and leaves

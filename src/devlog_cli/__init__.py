@@ -171,6 +171,13 @@ def install(
         help="Inject the full convention even when a global install is detected "
         "(useful for repos shared with collaborators who lack the global install).",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite locally-edited hooks and slash commands with the shipped "
+        "templates. Untouched files already resync without this; use it to discard "
+        "an edit you know is obsolete. Never deletes files.",
+    ),
 ) -> None:
     """Inject the blog convention into an agent's context file."""
     try:
@@ -194,12 +201,14 @@ def install(
         raise typer.Exit(1)
 
     if global_:
-        _install_global(agent, with_hook=with_hook)
+        _install_global(agent, with_hook=with_hook, force=force)
     else:
-        _install_local(agent, with_hook=with_hook, full=full)
+        _install_local(agent, with_hook=with_hook, full=full, force=force)
 
 
-def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -> None:
+def _install_local(
+    agent: AgentConfig, *, with_hook: bool, full: bool = False, force: bool = False
+) -> None:
     """Per-project install: inject convention into the project's context file."""
     project_root = Path.cwd()
 
@@ -298,8 +307,8 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
     # Install slash commands (default-on for agents with a commands dir).
     if agent.commands_dir:
         prev_commands = previous_manifest.commands if previous_manifest else []
-        records, preserved, orphans = _install_agent_commands(
-            project_root, agent.commands_dir, prev_commands
+        records, preserved, orphans, discarded = _install_agent_commands(
+            project_root, agent.commands_dir, prev_commands, force=force
         )
         for cmd_record in records:
             manifest.commands.append(cmd_record)
@@ -308,6 +317,12 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
                     f"[yellow]Preserved customized slash command[/yellow] "
                     f"[cyan]/{cmd_record['name']}[/cyan] "
                     f"([dim]{cmd_record['path']} \u2014 local edits kept[/dim])"
+                )
+            elif cmd_record["name"] in discarded:
+                tree.add(
+                    f"[yellow]Overwrote customized slash command[/yellow] "
+                    f"[cyan]/{cmd_record['name']}[/cyan] "
+                    f"([dim]{cmd_record['path']} \u2014 local edits discarded by --force[/dim])"
                 )
             else:
                 tree.add(
@@ -321,7 +336,9 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
     # Install the Claude Code hooks \u2014 when requested, or carried forward
     # from a previous install.
     if agent.supports_hooks:
-        _install_claude_hooks(project_root, previous_manifest, with_hook, tree, manifest)
+        _install_claude_hooks(
+            project_root, previous_manifest, with_hook, tree, manifest, force=force
+        )
 
     manifest.save()
     tree.add("[dim]Manifest saved[/dim]")
@@ -340,7 +357,7 @@ def _install_local(agent: AgentConfig, *, with_hook: bool, full: bool = False) -
         )
 
 
-def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
+def _install_global(agent: AgentConfig, *, with_hook: bool, force: bool = False) -> None:
     """Global install: inject convention into the agent's global context file
     (e.g. ~/.claude/CLAUDE.md, ~/.config/opencode/AGENTS.md) so it applies to
     every project."""
@@ -402,8 +419,8 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
     # Install slash commands globally (default-on for agents with a commands dir).
     if agent.commands_dir:
         prev_commands = previous_manifest.commands if previous_manifest else []
-        records, preserved, orphans = _install_agent_commands(
-            home, f"{agent.global_dir}/commands", prev_commands
+        records, preserved, orphans, discarded = _install_agent_commands(
+            home, f"{agent.global_dir}/commands", prev_commands, force=force
         )
         for cmd_record in records:
             manifest.commands.append(cmd_record)
@@ -412,6 +429,12 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
                     f"[yellow]Preserved customized global slash command[/yellow] "
                     f"[cyan]/{cmd_record['name']}[/cyan] "
                     f"([dim]~/{cmd_record['path']} — local edits kept[/dim])"
+                )
+            elif cmd_record["name"] in discarded:
+                tree.add(
+                    f"[yellow]Overwrote customized global slash command[/yellow] "
+                    f"[cyan]/{cmd_record['name']}[/cyan] "
+                    f"([dim]~/{cmd_record['path']} — local edits discarded by --force[/dim])"
                 )
             else:
                 tree.add(
@@ -426,7 +449,14 @@ def _install_global(agent: AgentConfig, *, with_hook: bool) -> None:
     # previous install.
     if agent.supports_hooks:
         _install_claude_hooks(
-            home, previous_manifest, with_hook, tree, manifest, global_mode=True, display_prefix="~/"
+            home,
+            previous_manifest,
+            with_hook,
+            tree,
+            manifest,
+            global_mode=True,
+            display_prefix="~/",
+            force=force,
         )
 
     manifest.save()
@@ -1350,15 +1380,25 @@ def _install_claude_hook(
     previous: dict[str, Any] | None = None,
     *,
     global_mode: bool = False,
-) -> tuple[dict[str, Any], bool]:
+    force: bool = False,
+) -> tuple[dict[str, Any], bool, bool]:
     """Copy a hook script and register it under `event` in settings.json.
 
     root_dir is the project root (per-project) or Path.home() (global).
     `previous` is the prior manifest's record for this event, used to detect
     user customizations of the script (mirroring slash-command handling).
 
-    Returns ``(record, preserved)`` — the manifest record, and whether an
-    existing customized script was left untouched instead of overwritten.
+    `force` skips the customization check and installs the shipped template
+    unconditionally. The check compares the file against both the recorded
+    install-time hash and the new template, so an untouched file already
+    resyncs on its own; force exists for the case the hashes cannot see —
+    a local edit the user now knows is obsolete (e.g. a hand-applied draft
+    of a change that has since shipped). Without it the only remedy is
+    copying the template over by hand.
+
+    Returns ``(record, preserved, discarded)`` — the manifest record, whether
+    an existing customized script was left untouched, and whether `force`
+    overwrote one that would otherwise have been preserved.
     """
     command = _hook_command(script_rel, global_mode=global_mode)
 
@@ -1369,14 +1409,30 @@ def _install_claude_hook(
     script_dst.parent.mkdir(parents=True, exist_ok=True)
 
     preserved = False
+    discarded = False
     record_hash = new_hash
-    prev_hash = (previous or {}).get("sha256")
-    if script_dst.exists() and prev_hash:
+    source_hash = new_hash
+    prev = previous or {}
+    # Compare against what devlog last *wrote* here, not against what was last
+    # on disk. After a preserve those differ: `sha256` holds the user's content,
+    # so a later template change would read "unchanged since install" and
+    # silently overwrite the very customization the earlier run protected.
+    # `source_sha256` is only updated when devlog actually writes the file.
+    # Fall back to `sha256` for manifests written before this field existed.
+    baseline = prev.get("source_sha256") or prev.get("sha256")
+    if script_dst.exists() and baseline:
         current_hash = _safe_file_hash(script_dst)
-        if current_hash and current_hash != prev_hash and current_hash != new_hash:
+        customized = bool(
+            current_hash and current_hash != baseline and current_hash != new_hash
+        )
+        if customized and not force:
             # User edited the script since install — keep their version.
             preserved = True
             record_hash = current_hash
+            source_hash = baseline  # carry forward; devlog wrote nothing now
+        elif customized:
+            # --force: their edit is about to be overwritten. Say so.
+            discarded = True
         # current_hash is None → unreadable; fall through and overwrite from
         # the template rather than aborting the install.
     # When the previous record carries no sha256 (pre-hashing manifests) we
@@ -1430,7 +1486,8 @@ def _install_claude_hook(
         "script_path": script_rel,
         "command": command,
         "sha256": record_hash,
-    }, preserved
+        "source_sha256": source_hash,
+    }, preserved, discarded
 
 
 def _install_claude_hooks(
@@ -1442,6 +1499,7 @@ def _install_claude_hooks(
     *,
     global_mode: bool = False,
     display_prefix: str = "",
+    force: bool = False,
 ) -> None:
     """Install the devlog hook bundle when requested (--with-hook) or carried
     forward from a previous install. A reinstall without --with-hook must not
@@ -1452,13 +1510,18 @@ def _install_claude_hooks(
         return
     for event, script_rel in CLAUDE_HOOKS:
         prev = next((h for h in prev_hooks if h.get("event") == event), None)
-        hook_record, preserved = _install_claude_hook(
-            root_dir, event, script_rel, prev, global_mode=global_mode
+        hook_record, preserved, discarded = _install_claude_hook(
+            root_dir, event, script_rel, prev, global_mode=global_mode, force=force
         )
         manifest.hooks.append(hook_record)
         carried = not with_hook and prev is not None
         _add_hook_tree_line(
-            tree, hook_record, preserved, carried=carried, display_prefix=display_prefix
+            tree,
+            hook_record,
+            preserved,
+            carried=carried,
+            display_prefix=display_prefix,
+            discarded=discarded,
         )
 
 
@@ -1469,6 +1532,7 @@ def _add_hook_tree_line(
     *,
     carried: bool,
     display_prefix: str = "",
+    discarded: bool = False,
 ) -> None:
     """Report what happened to a hook during install."""
     event = hook_record.get("event", "")
@@ -1479,6 +1543,11 @@ def _add_hook_tree_line(
     if preserved:
         tree.add(
             f"[yellow]Preserved customized {event} hook script[/yellow] ({paths} — local edits kept)"
+        )
+    elif discarded:
+        tree.add(
+            f"[yellow]Overwrote customized {event} hook script[/yellow] "
+            f"({paths} — local edits discarded by --force)"
         )
     elif carried:
         tree.add(f"[green]Refreshed existing {event} hook[/green] ({paths})")
@@ -1570,7 +1639,9 @@ def _install_agent_commands(
     root_dir: Path,
     commands_dir_rel: str,
     previous: list[dict[str, Any]] | None = None,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    *,
+    force: bool = False,
+) -> tuple[list[dict[str, Any]], list[str], list[str], list[str]]:
     """Copy bundled slash command templates into the agent's commands dir
     (e.g. .claude/commands/, .opencode/commands/).
 
@@ -1579,13 +1650,18 @@ def _install_agent_commands(
     `previous` is the prior manifest's commands list (used to reconcile orphans
     from removed/renamed templates and to detect user customizations).
 
-    Returns ``(records, preserved, removed_orphans)``:
+    `force` overwrites customized commands with the shipped template. It does
+    not affect orphan reconciliation below: overwriting a stale file is
+    recoverable from the template, deleting a customized one is not.
+
+    Returns ``(records, preserved, removed_orphans, discarded)``:
         records          — command records to store in the new manifest.
         preserved        — names of commands that were left untouched because
                            the user customized them since install (warn the
                            caller; do not overwrite).
         removed_orphans  — paths of files removed because the corresponding
                            template no longer exists in this version.
+        discarded        — names whose customization `force` overwrote.
     """
     src_dir = _templates_dir() / "commands"
     dst_dir = root_dir / commands_dir_rel
@@ -1597,12 +1673,13 @@ def _install_agent_commands(
     # would otherwise treat every tracked command as an orphan and delete user
     # files on what is really a broken install — a net-destructive failure mode.
     if not src_dir.is_dir():
-        return list(previous), [], []
+        return list(previous), [], [], []
 
     prev_by_name = {p["name"]: p for p in previous if "name" in p}
 
     records: list[dict[str, Any]] = []
     preserved: list[str] = []
+    discarded: list[str] = []
     removed_orphans: list[str] = []
 
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -1613,18 +1690,34 @@ def _install_agent_commands(
         rel = f"{commands_dir_rel}/{src.name}"
 
         prev = prev_by_name.get(src.stem)
-        if dst.exists() and prev and prev.get("sha256"):
+        # Compare against what devlog last wrote (see _install_claude_hook for
+        # why `sha256` alone is the wrong baseline after a preserve).
+        baseline = (prev or {}).get("source_sha256") or (prev or {}).get("sha256")
+        if dst.exists() and baseline:
             current_hash = _safe_file_hash(dst)
-            if current_hash and current_hash != prev["sha256"] and current_hash != new_hash:
-                # User edited the file since install — preserve their edits.
-                records.append({"name": src.stem, "path": rel, "sha256": current_hash})
-                preserved.append(src.stem)
-                continue
+            if current_hash and current_hash != baseline and current_hash != new_hash:
+                if not force:
+                    # User edited the file since install — preserve their edits.
+                    records.append({
+                        "name": src.stem,
+                        "path": rel,
+                        "sha256": current_hash,
+                        "source_sha256": baseline,  # devlog wrote nothing now
+                    })
+                    preserved.append(src.stem)
+                    continue
+                # --force: overwrite below, but surface what was lost.
+                discarded.append(src.stem)
             # current_hash is None → file is unreadable. Fall through and
             # overwrite from the template; better than aborting the install.
 
         shutil.copy2(src, dst)
-        records.append({"name": src.stem, "path": rel, "sha256": new_hash})
+        records.append({
+            "name": src.stem,
+            "path": rel,
+            "sha256": new_hash,
+            "source_sha256": new_hash,
+        })
 
     # Reconcile orphans: any previously-tracked command that this version no
     # longer ships should be removed, unless the user customized it (in which
@@ -1659,7 +1752,7 @@ def _install_agent_commands(
                 break
             parent = parent.parent
 
-    return records, preserved, removed_orphans
+    return records, preserved, removed_orphans, discarded
 
 
 def _safe_file_hash(path: Path) -> str | None:

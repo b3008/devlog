@@ -1,9 +1,9 @@
 {
   "agent": "claude",
-  "version": "0.5.0",
-  "installed_at": "2026-07-29T12:33:29.180031+00:00",
+  "version": "0.6.0",
+  "installed_at": "2026-07-29T16:14:27.539921+00:00",
   "files": {
-    "CLAUDE.md": "7213b01ccd7271ee5b0d2dff587296719a18acf2556d6e1c99465367175df094"
+    "CLAUDE.md": "30407cadcc8c0a1f26e4ba80d9f07dfa72652ebaa05f729021cab30f94904a16"
   },
   "hooks": [
     {
@@ -11,36 +11,42 @@
       "settings_path": ".claude/settings.json",
       "script_path": ".devlog/hooks/stop.py",
       "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/stop.py\"",
-      "sha256": "6cac0d40054e2efa4902689c239f84446d7c7f5e8591a9ae7fe1e87be75e2150"
+      "sha256": "6cac0d40054e2efa4902689c239f84446d7c7f5e8591a9ae7fe1e87be75e2150",
+      "source_sha256": "6cac0d40054e2efa4902689c239f84446d7c7f5e8591a9ae7fe1e87be75e2150"
     },
     {
       "event": "SessionEnd",
       "settings_path": ".claude/settings.json",
       "script_path": ".devlog/hooks/session_end.py",
       "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/session_end.py\"",
-      "sha256": "c0b541dae883ec991c695ab9421afad086583cf146622467fe768682f51a5db2"
+      "sha256": "c0b541dae883ec991c695ab9421afad086583cf146622467fe768682f51a5db2",
+      "source_sha256": "c0b541dae883ec991c695ab9421afad086583cf146622467fe768682f51a5db2"
     }
   ],
   "commands": [
     {
       "name": "devlog-catchup",
       "path": ".claude/commands/devlog-catchup.md",
-      "sha256": "b9ab3181c6384bcc1b0a0de76f5c19c044bd68488d22c10ffe09cb423493adbb"
+      "sha256": "b9ab3181c6384bcc1b0a0de76f5c19c044bd68488d22c10ffe09cb423493adbb",
+      "source_sha256": "b9ab3181c6384bcc1b0a0de76f5c19c044bd68488d22c10ffe09cb423493adbb"
     },
     {
       "name": "devlog-manicure",
       "path": ".claude/commands/devlog-manicure.md",
-      "sha256": "c30de59cb68c31fba19bd7e7087a640ad22113fd663369d861d6d2e40430a585"
+      "sha256": "c30de59cb68c31fba19bd7e7087a640ad22113fd663369d861d6d2e40430a585",
+      "source_sha256": "c30de59cb68c31fba19bd7e7087a640ad22113fd663369d861d6d2e40430a585"
     },
     {
       "name": "devlog-upgrade",
       "path": ".claude/commands/devlog-upgrade.md",
-      "sha256": "7c3a9fe7b73e27963d0a5a2a6b1f616ded060fad7bb5c1ec76d205572f207219"
+      "sha256": "7c3a9fe7b73e27963d0a5a2a6b1f616ded060fad7bb5c1ec76d205572f207219",
+      "source_sha256": "7c3a9fe7b73e27963d0a5a2a6b1f616ded060fad7bb5c1ec76d205572f207219"
     },
     {
       "name": "devlog-write",
       "path": ".claude/commands/devlog-write.md",
-      "sha256": "552ec2bf0fcdc51ad2d2063923566bf968d7d685f7e3bff2d62aedf1d493a85a"
+      "sha256": "552ec2bf0fcdc51ad2d2063923566bf968d7d685f7e3bff2d62aedf1d493a85a",
+      "source_sha256": "552ec2bf0fcdc51ad2d2063923566bf968d7d685f7e3bff2d62aedf1d493a85a"
     }
   ]
 }

@@ -188,11 +188,61 @@ class TestInstallWithHook:
         old = "# old template version\n"
         script.write_text(old, encoding="utf-8")
         data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        data["hooks"][0]["sha256"] = hashlib.sha256(old.encode("utf-8")).hexdigest()
+        old_hash = hashlib.sha256(old.encode("utf-8")).hexdigest()
+        # devlog itself wrote that old template, so both hashes record it.
+        data["hooks"][0]["sha256"] = old_hash
+        data["hooks"][0]["source_sha256"] = old_hash
         manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
         runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
         assert script.read_text(encoding="utf-8") != old
+
+    def test_reinstall_refreshes_stale_hook_from_legacy_manifest(self, initialized_project: Path):
+        """Manifests written before `source_sha256` existed carry only `sha256`.
+        The baseline falls back to it, so legacy installs still resync."""
+        import hashlib
+
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        manifest_path = initialized_project / ".devlog" / "manifests" / "claude.manifest.json"
+        old = "# old template version\n"
+        script.write_text(old, encoding="utf-8")
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data["hooks"][0]["sha256"] = hashlib.sha256(old.encode("utf-8")).hexdigest()
+        data["hooks"][0].pop("source_sha256", None)  # pre-field manifest
+        manifest_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        assert script.read_text(encoding="utf-8") != old
+
+    def test_customization_survives_a_later_template_change(self, initialized_project: Path):
+        """The regression this field exists for. A preserve records the user's
+        hash in `sha256`; if that were the only baseline, the NEXT template
+        change would read "unchanged since install" and silently destroy the
+        customization the earlier run protected."""
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        mine = "# USER CUSTOMIZATION\n"
+        script.write_text(mine, encoding="utf-8")
+
+        # 1. A reinstall preserves it (and must not adopt it as the baseline).
+        result = runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        assert "Preserved" in result.output
+        assert script.read_text(encoding="utf-8") == mine
+
+        # 2. Now the shipped template changes underneath them.
+        import devlog_cli
+
+        tmpl = devlog_cli._templates_dir() / "hooks" / "stop.py"
+        original = tmpl.read_text(encoding="utf-8")
+        try:
+            tmpl.write_text(original + "\n# template moved on\n", encoding="utf-8")
+            result = runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        finally:
+            tmpl.write_text(original, encoding="utf-8")
+
+        assert script.read_text(encoding="utf-8") == mine, "customization was destroyed"
+        assert "Preserved" in result.output
 
     def test_reinstall_preserves_customized_hook_script(self, initialized_project: Path):
         runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
@@ -202,6 +252,33 @@ class TestInstallWithHook:
         assert result.exit_code == 0
         assert script.read_text(encoding="utf-8") == "# my custom hook\n"
         assert "Preserved" in result.output
+
+    def test_force_overwrites_customized_hook_script(self, initialized_project: Path):
+        """--force discards a local edit the user knows is obsolete. Without it
+        the only remedy is copying the template over by hand."""
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        script.write_text("# my custom hook\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["install", "--ai", "claude", "--with-hook", "--force"])
+        assert result.exit_code == 0
+        assert script.read_text(encoding="utf-8") != "# my custom hook\n"
+        assert "stop_hook_active" in script.read_text(encoding="utf-8")  # real template
+        # The loss must be reported, not silently folded into "Refreshed".
+        assert "Overwrote customized" in result.output
+
+    def test_force_records_new_hash_so_next_install_is_quiet(self, initialized_project: Path):
+        """After a forced overwrite the manifest must track the template hash,
+        or the very next install would report the file as customized again."""
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        script = initialized_project / ".devlog" / "hooks" / "stop.py"
+        script.write_text("# my custom hook\n", encoding="utf-8")
+        runner.invoke(app, ["install", "--ai", "claude", "--with-hook", "--force"])
+
+        result = runner.invoke(app, ["install", "--ai", "claude", "--with-hook"])
+        assert result.exit_code == 0
+        assert "Preserved" not in result.output
+        assert "Overwrote" not in result.output
 
     def test_rejected_for_non_claude(self, initialized_project: Path):
         result = runner.invoke(app, ["install", "--ai", "copilot", "--with-hook"])
@@ -356,6 +433,28 @@ class TestSlashCommands:
         new_data = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert "devlog-zombie" not in {c["name"] for c in new_data["commands"]}
 
+    def test_force_overwrites_customized_command(self, initialized_project: Path):
+        runner.invoke(app, ["install", "--ai", "claude"])
+        cmd = initialized_project / ".claude" / "commands" / "devlog-catchup.md"
+        cmd.write_text("# mine\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["install", "--ai", "claude", "--force"])
+        assert result.exit_code == 0
+        assert cmd.read_text(encoding="utf-8") != "# mine\n"
+        assert "Overwrote customized" in result.output
+
+    def test_force_does_not_delete_orphans(self, initialized_project: Path):
+        """--force overwrites from a template; it must never widen into deletion.
+        Overwriting is recoverable from the template, deleting is not."""
+        runner.invoke(app, ["install", "--ai", "claude"])
+        orphan = initialized_project / ".claude" / "commands" / "my-own-command.md"
+        orphan.write_text("# not devlog's\n", encoding="utf-8")
+
+        result = runner.invoke(app, ["install", "--ai", "claude", "--force"])
+        assert result.exit_code == 0
+        assert orphan.exists()
+        assert orphan.read_text(encoding="utf-8") == "# not devlog's\n"
+
     def test_install_passthrough_when_templates_missing(self, initialized_project: Path, monkeypatch):
         """If templates/commands/ is missing (packaging error / incomplete checkout),
         reinstall must NOT delete previously-tracked commands as orphans."""
@@ -372,12 +471,13 @@ class TestSlashCommands:
         broken_root.mkdir()
         monkeypatch.setattr("devlog_cli._templates_dir", lambda: broken_root)
 
-        records, preserved, orphans = _install_agent_commands(
+        records, preserved, orphans, discarded = _install_agent_commands(
             initialized_project, ".claude/commands", previous
         )
         assert records == previous  # passthrough preserves the prior manifest exactly
         assert preserved == []
         assert orphans == []
+        assert discarded == []
         assert cmd_file.exists()  # critically, no files deleted
 
     def test_reinstall_overwrites_unreadable_file(self, initialized_project: Path):

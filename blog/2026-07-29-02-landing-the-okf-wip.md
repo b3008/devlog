@@ -41,9 +41,13 @@ Auto-migration inside `devlog install` fired on a legacy blog, `devlog status` r
 
 That is the preservation logic working exactly as designed and producing the wrong outcome. The heuristic is *"the installed file's hash differs from the shipped template, therefore a human customized it — don't clobber it."* But a hash mismatch has two causes, and the check cannot tell them apart: a genuine local edit, or an **older draft of the template itself**, which is what this was. A hash says *different*, not *deliberately different*.
 
+> **Update 2026-07-29**: the characterisation above is wrong, and reading the code rather than the output would have caught it. The check is a *three-way* comparison — the file against both the manifest's install-time hash and the new template — so an untouched file already resyncs on its own. What actually happened here is narrower: the file had genuinely been edited after install (by hand, in an earlier session), so preserving it was correct. The real gap was that no escape hatch existed to override it. Chasing that turned up a separate and more serious bug. See [Preserving a customization until the next release](2026-07-29-03-preservation-baseline.md).
+
 The consequence is quiet and asymmetric: the file most likely to be mid-iteration is the one the tool most reliably refuses to update, so a project can sit indefinitely on a stale hook while `install` reports success every time. The convention's own budget warning was the thing being suppressed here — the hook was still warning at 100KB after the template moved to 60KB.
 
 Worth noting this is the *safe* failure direction. Silently overwriting a real customization is worse than declining to update a stale one. But "preserved" reads as a decision the tool made on evidence, and it isn't one. Something like a `--force-hooks` escape hatch, or recording the hash of the template a file was installed *from* so drift can be told apart from customization, would close it. Not built yet.
+
+> **Update 2026-07-29**: `--force` shipped in 0.6.0, and the "record what was installed from" idea turned out to be the fix for the real bug rather than this one.
 
 ## How it works
 
