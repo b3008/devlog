@@ -33,7 +33,7 @@ In topic-scoped mode, every phase below narrows accordingly: the audit only cate
 Read, in chronological order (oldest first):
 
 1. Every entry in `<blog_dir>/` (skip `<index_file>`).
-2. `.devlog/learned.md`.
+2. `.devlog/learned.md`, plus every file in `.devlog/knowledge/` if that directory exists. This command is the one exception to the load-on-demand rule — auditing the knowledge base means reading all of it, and the checks below cannot be done from the index alone.
 3. `.devlog/config.yaml` for the current canonical sections, voice, and tag vocabulary.
 
 For each entry, capture:
@@ -56,6 +56,9 @@ Generate your own categories where useful — examples to consider, not a closed
 - **Audience drift** — voice that wandered from the project's stated voice guidelines.
 - **Promise vs. delivery gaps** — explicit "we will" statements with no follow-up.
 - **Vocabulary churn** — terms used inconsistently across entries (worth normalizing into `learned.md`).
+- **Closed threads still listed** — bullets under **Open threads** in `.devlog/learned.md` whose work the entries show is finished, or whose premise has since died. This is the sweep that keeps the file loadable: propose each for deletion (or for archival to `.devlog/archive/` when the history is worth grepping later), and for a partly-settled thread propose the one line that should remain. Report `learned.md`'s current size against its ~60KB budget whenever you run this dimension.
+- 📚 **Outgrown topic files** — files under `.devlog/knowledge/` that have themselves grown past a single comfortable read (~60KB, or noticeably larger than their siblings). A topic file that no longer loads in one piece has recreated the original problem one level down. Propose a split along the seam the contents suggest, with the resulting index hooks.
+- 🧭 **Stale index hooks** — lines in `learned.md` whose one-clause description no longer matches what the linked file actually contains, or that point at a file that has been renamed or deleted. A stale hook is worse than a missing one: it actively misroutes triage, so a session skips a file that had the answer, or opens one that doesn't. Propose the corrected clause. Flag any `knowledge/` file with no index line at all — it is invisible to every future session.
 
 Report the audit as a structured table or grouped list. Cite entry filenames for every finding. Be concrete — quote the original phrasing when relevant.
 
@@ -109,5 +112,7 @@ After applying:
 - Report which files were modified and which suggestions were applied vs. declined.
 - If any durable lesson emerged from the manicure pass — a recurring failure mode in the convention, a vocabulary normalization worth keeping — append it tersely to the appropriate section of `.devlog/learned.md`.
 - If the recap entry itself surfaced new open threads, add them to the **Open threads** section of `learned.md` as well.
+- Apply the approved deletions and archival moves from the **Closed threads still listed** dimension, and report `learned.md`'s size before and after. Removal is the point of the pass, not a side effect of it.
+- Apply any approved hook corrections and topic-file splits. After a split, verify every file under `.devlog/knowledge/` has exactly one index line in `learned.md` and that its clause describes the file's current contents — the index is the only thing standing between that knowledge and invisibility.
 
 If the user declines all suggestions, that's fine — the recap entry alone is a useful artifact. Confirm completion either way.

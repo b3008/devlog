@@ -31,7 +31,7 @@ After bootstrapping, re-read `.devlog/config.yaml` so the path resolution above 
 ## Step 1 — Load context
 
 1. Read `.devlog/config.yaml` to get this project's current sections, voice guidelines, tags, and frontmatter fields. The convention may be customized; defer to the config over your prior assumptions.
-2. Read `.devlog/learned.md` for project-specific vocabulary, entity names, recurring themes, and open threads. Reuse established terms.
+2. Read `.devlog/learned.md` for project-specific vocabulary, entity names, recurring themes, and open threads. Reuse established terms. If it is an index of one-line pointers into `.devlog/knowledge/` rather than a flat file, read the index first, then open **only** the topic files whose hooks bear on this entry's topic — not the whole directory. `.devlog/archive/` holds closed threads and is for grep, not for loading.
 3. Read `<blog_dir>/<index_file>` (e.g. `blog/index.md`) and the 1–2 most recent entries to match the established voice, structure, and level of detail. Avoid repeating points already covered there.
 
 ## Step 2 — Compute filename and timestamp
@@ -56,8 +56,9 @@ Skip any sections that don't apply. Keep the voice consistent with recent entrie
 ## Step 4 — Update the index and learned.md
 
 1. Regenerate the index: run `devlog index` if the CLI is available; otherwise add the new entry to the top of `<blog_dir>/<index_file>` in the existing format.
-2. If durable project knowledge emerged from this entry — a new term worth naming, a pattern, an open thread — append it tersely to the appropriate section of `.devlog/learned.md`. Do not duplicate what's already there.
+2. If durable project knowledge emerged from this entry — a new term worth naming, a pattern, an open thread — record it tersely where a later session will find it. In a flat `learned.md`, that is the matching section. In an indexed one, it is the `.devlog/knowledge/` topic file that covers it (create one if no existing topic fits), plus an added or refreshed one-line hook for that file in the index — a hook that no longer describes its file misroutes every future read. Open threads always stay in `learned.md` itself. Do not duplicate what's already there.
+3. **Close what this entry resolved.** If the work narrated here settles a thread listed under **Open threads**, delete that line in the same turn — the entry you just wrote is now its record, and git keeps the rest. Where a thread is only partly settled, cut it down to the one line still open rather than appending a status update to it. A bullet accumulating `PROPOSED → IMPLEMENTED → CLOSED` is the signal to remove it, not extend it.
 
 ## Step 5 — Report back
 
-Confirm the entry path, the chosen `NN`, and a one-line summary of what was written. If you appended anything to `learned.md`, mention what.
+Confirm the entry path, the chosen `NN`, and a one-line summary of what was written. If you appended anything to `learned.md`, mention what — and if you closed a thread there, say which.

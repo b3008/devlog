@@ -1,9 +1,9 @@
 {
   "agent": "claude",
   "version": "0.5.0",
-  "installed_at": "2026-07-29T12:32:29.517586+00:00",
+  "installed_at": "2026-07-29T12:33:29.180031+00:00",
   "files": {
-    "CLAUDE.md": "55e63ae9ef095e71b43636e88fe0952e1ea8383e49aa536ef30e26fedc36971d"
+    "CLAUDE.md": "7213b01ccd7271ee5b0d2dff587296719a18acf2556d6e1c99465367175df094"
   },
   "hooks": [
     {
@@ -11,7 +11,7 @@
       "settings_path": ".claude/settings.json",
       "script_path": ".devlog/hooks/stop.py",
       "command": "python3 \"$CLAUDE_PROJECT_DIR/.devlog/hooks/stop.py\"",
-      "sha256": "dca3cc8abf494e2fbb41669e7194c73b01cf0dfc4d1f959235cc380072e125c0"
+      "sha256": "6cac0d40054e2efa4902689c239f84446d7c7f5e8591a9ae7fe1e87be75e2150"
     },
     {
       "event": "SessionEnd",
@@ -25,12 +25,12 @@
     {
       "name": "devlog-catchup",
       "path": ".claude/commands/devlog-catchup.md",
-      "sha256": "1a78323ef12ef959014a2dc72b689d638a920d4df4ff2884e4abe9f1f8966ea1"
+      "sha256": "b9ab3181c6384bcc1b0a0de76f5c19c044bd68488d22c10ffe09cb423493adbb"
     },
     {
       "name": "devlog-manicure",
       "path": ".claude/commands/devlog-manicure.md",
-      "sha256": "e3516c8c759c35c00c6b9c5d2fcee91579388968079253f573b5f212e69eab55"
+      "sha256": "c30de59cb68c31fba19bd7e7087a640ad22113fd663369d861d6d2e40430a585"
     },
     {
       "name": "devlog-upgrade",
@@ -40,7 +40,7 @@
     {
       "name": "devlog-write",
       "path": ".claude/commands/devlog-write.md",
-      "sha256": "3da435d987a89a8265e1ff305d880d2e77dd95b97aa598d761e0573976d74281"
+      "sha256": "552ec2bf0fcdc51ad2d2063923566bf968d7d685f7e3bff2d62aedf1d493a85a"
     }
   ]
 }

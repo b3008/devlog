@@ -422,7 +422,7 @@ When you write or update an entry, report it in one line \u2014 just the file pa
 If the current project does not yet have a `{blog_dir}/` directory, scaffold it before writing the first entry:
 1. Create `{blog_dir}/`, `{blog_dir}/media/`, and `.devlog/`.
 2. Create `{blog_dir}/{config.get("index_file", OKF_INDEX_FILE)}` with a heading using the project\u2019s directory name.
-3. Copy `.devlog/learned.md` from the template below or create an empty one with section headings: Glossary, Entities, Recurring themes, Open threads.
+3. Copy `.devlog/learned.md` from the template below or create an empty one with section headings: Glossary, Entities, Recurring themes, Open threads. Start it flat — one file is the right shape for most projects, and it only splits into `.devlog/knowledge/` if it outgrows the budget described under **Project context**. Create `.devlog/archive/` alongside it — resolved threads move there rather than accumulating in the live file.
 
 If the project has a `.devlog/config.yaml`, use its settings for triggers, voice, and tags **instead of** the defaults below. If it doesn\u2019t, use the defaults."""
     else:
@@ -448,7 +448,26 @@ If none of these triggers match the kind of work happening in this project, the 
 
 Before writing an entry, read `.devlog/learned.md`. It holds project-specific vocabulary, entity names, recurring themes, and open threads that previous sessions have accumulated. Use what's there to stay consistent with prior entries.
 
-When durable project knowledge emerges during the session \u2014 a new domain term worth naming, a pattern seen across multiple sessions, a tension or decision worth remembering \u2014 append it to the appropriate section of `.devlog/learned.md`. Keep additions terse; this file is a shared notebook, not a changelog.
+That file has two shapes, and it is the first thing you open in either one:
+
+- **Flat** — four sections (Glossary, Entities, Recurring themes, Open threads) in the single file. This is the starting shape and the right one for most projects: read it and you have everything.
+- **Indexed** — `learned.md` is a list of one-line pointers into `.devlog/knowledge/`, with Open threads still written out in full inside it. Read the index, then open **only** the topic files whose hooks relate to what you're working on. Do not load the whole directory: the index is cheap precisely so that everything behind it can be optional, and reading all of it forfeits the entire benefit.
+
+`.devlog/archive/` holds closed and superseded material in either shape. Grep it when you need the history behind a resolved thread; never load it wholesale.
+
+When durable project knowledge emerges during the session \u2014 a new domain term worth naming, a pattern seen across multiple sessions, a tension or decision worth remembering \u2014 write it where a later session will find it. In the flat shape that is the matching section of `.devlog/learned.md`. In the indexed shape it is the topic file it belongs to under `.devlog/knowledge/` \u2014 create one if no existing topic fits \u2014 and then add or refresh that file's one-line hook in the index. Keep additions terse; this is a shared notebook, not a changelog.
+
+**Remove as deliberately as you add.** Durable knowledge is atemporal \u2014 a term stays a term, a hard-won gotcha stays true \u2014 so glossary, entity and recurring-theme material only ever grows, wherever it lives. **Open threads is the exception: it holds only what is still unresolved,** and it stays written out in `learned.md` itself in both shapes, because it is a live list rather than reference material and it is what a session needs first. When a thread closes, delete its line in the same turn; `{blog_dir}/` already narrates the resolution at better quality and git keeps every byte. Never let a bullet accumulate its own status history (`PROPOSED \u2192 IMPLEMENTED \u2192 CLOSED`) \u2014 a bullet doing that is telling you to remove it, not extend it. If a thread has a live remnant, cut it down to the one line that is still open. Resolved material worth keeping outside git history goes to `.devlog/archive/`, which is greppable but never auto-loaded.
+
+**Keep what gets loaded small.** `learned.md` is meant to be read in full at the start of a session, and it stops being read in full long before it looks large. A read returns at most ~25,000 tokens; past that you silently get a **truncated page** instead of the file, which looks exactly like success. Bytes are a poor proxy for that limit and they mislead in the dangerous direction \u2014 ordinary prose runs about 4 bytes per token, but a notebook thick with identifiers, paths and code fragments runs nearer 2.5, so it can blow the limit at **~60KB** where a byte estimate would promise 100KB. Past roughly 250KB the read fails outright. Nothing reports either failure, so this budget is the only warning you get.
+
+**At ~60KB, stop trimming and split.** Below that, subtraction is enough \u2014 archive what has closed and the file stays healthy. Above it, a flat file has a structural problem that trimming cannot fix: it must load all of its knowledge or none, and the durable reference material is exactly the part you are not allowed to delete. Splitting costs a few hundred tokens for the index and makes everything behind it load on demand. To split:
+
+1. Create `.devlog/knowledge/` and move the durable material into topic files (`<topic>.md`). **Group by topic, not one file per fact** \u2014 related gotchas are worth reading together, and a few dozen files stay manageable in git and for a human where two hundred do not.
+2. Replace that material in `learned.md` with one line per file: `- [Title](knowledge/slug.md) \u2014 what's inside, in one clause`. **The clause after the dash is the load-bearing part** \u2014 it is all a future session has to judge whether the file is worth opening. A bare title is worse than not splitting at all: with nothing to triage on, the reader either opens everything (no gain) or opens nothing (the knowledge is now invisible, where an oversized flat file at least still greps).
+3. Leave **Open threads** written out in the index, and move anything already resolved to `.devlog/archive/` on the way past.
+
+`learned.md` keeps its name through all of this \u2014 this convention, the devlog slash commands, and any project docs all cite that path.
 
 ### How to write an entry
 
@@ -468,7 +487,7 @@ When durable project knowledge emerges during the session \u2014 a new domain te
 
 7. If the entry corrects or supersedes a claim made in an earlier entry, annotate the superseded entry **in the same turn**: add a dated blockquote (`> **Update YYYY-MM-DD**: \u2026`) under the affected claim, linking to the new entry. Unmarked stale claims compound \u2014 future sessions act on them at face value.
 
-8. Commit the entry (plus any `learned.md` and index updates) together with the session's work. An uncommitted entry is invisible to other sessions, worktrees, and collaborators.
+8. Commit the entry (plus any `learned.md`, `.devlog/knowledge/`, `.devlog/archive/`, and index updates) together with the session's work. An uncommitted entry is invisible to other sessions, worktrees, and collaborators.
 
 ### Voice and audience
 
@@ -502,7 +521,7 @@ def generate_thin_convention(
 
 This project keeps a development blog in `{blog_dir}/`. The full convention — triggers, entry format, voice, tags — is in your global {context_name} (`{global_context_path}`, installed by devlog); follow it here. Project-specific settings live in `.devlog/config.yaml` and take precedence over the global defaults.
 
-Before writing an entry, read `.devlog/learned.md` for accumulated project vocabulary, themes, and open threads — and extend it when durable knowledge emerges.
+Before writing an entry, read `.devlog/learned.md` for accumulated project vocabulary, themes, and open threads — and extend it when durable knowledge emerges. If it is an index of pointers into `.devlog/knowledge/` rather than a flat file, load only the topic files whose hooks look relevant, and file new durable facts in the matching topic file.
 
 Collaborators without the global devlog install: run `devlog install --ai {agent_key} --full` in this project to inject the standalone convention here instead."""
 

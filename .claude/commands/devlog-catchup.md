@@ -23,7 +23,7 @@ Otherwise, proceed.
 
 1. Read `<blog_dir>/<index_file>` (e.g. `blog/index.md`) to see the entry list.
 2. Read the 5 most recent entries (or all of them if fewer than 5).
-3. Read `.devlog/learned.md` for accumulated project knowledge — glossary, entities, recurring themes, open threads.
+3. Read `.devlog/learned.md` for accumulated project knowledge — glossary, entities, recurring themes, open threads. If it is an index of one-line pointers into `.devlog/knowledge/` rather than a flat file, read the index and the Open threads written out in it, then open **only** the topic files whose hooks matter for the summary below. Do not load the whole `knowledge/` directory — the index exists so you don't have to. If `.devlog/archive/` exists it holds already-closed threads, greppable on demand but never loaded wholesale.
 
 Then summarize in this order:
 
