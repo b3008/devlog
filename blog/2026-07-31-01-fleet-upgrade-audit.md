@@ -4,7 +4,7 @@ title: "The upgrade path was pointing at a branch four releases behind"
 date: 2026-07-31
 timestamp: 2026-07-31T12:16:26
 tags: [infrastructure, research, cli]
-description: "A fleet-wide audit of 25 installed devlogs, prompted by a simple 'do I need to reinstall?', found that `uv tool upgrade devlog` would have downgraded the tool — and that three install layers drift independently with no command that sweeps them."
+description: "A fleet-wide audit of 25 installed devlogs, prompted by a simple 'do I need to reinstall?', found that `uv tool upgrade devlog` would have downgraded the tool, that four 'customized' global artifacts were merely stale, and a cold-repo bug that orphaned the legacy index in 16 of 24 projects — fixed in 0.6.1."
 ---
 
 ## What changed
@@ -99,15 +99,93 @@ pulls what's *published on GitHub*. Pushing a branch is publishing; it isn't
 enough. It pulls the **default branch**, specifically, which is a much sharper
 constraint — and the one that actually bit.
 
-## What's next
+## The resync, and what it turned up
 
-- **Merge `terser-output` to `main`.** Nothing about the upgrade path works until
-  the releases are where the installer looks. Four versions of work are currently
-  unreachable by every consumer including this machine.
+`main` was updated the same day (PR #18), which unblocked the path — so the rest
+of this entry is what actually happened when it ran.
+
+The tool layer went cleanly: `uv tool upgrade devlog` moved 0.3.0 → 0.6.0. The
+global layer did not. `devlog install --ai claude --global` reported four
+artifacts **preserved as customized** — three slash commands and the Stop hook —
+which would have meant real edits worth protecting. Diffing them against the
+shipped templates showed the opposite:
+
+```diff
+-- `<index_file>` is the `index_file` value (default: `index.md`).
++- `<index_file>` is the `index_file` value (default: `_index.md`).
+-BUDGET_BYTES = 60 * 1024
++BUDGET_BYTES = 100 * 1024
+```
+
+Every difference was template *evolution* — the pre-OKF index name, the old byte
+budget, the pre-`knowledge/` wording. Not one personal edit. These were stale
+0.4.x-era files that the preservation check could not distinguish from
+customizations, which is precisely the ambiguity 0.6.0 shipped `--force` for.
+`install --global --force` resynced all four, and this is the first time that
+escape hatch has been needed on something other than a test.
+
+Worth noting what the failure looked like from outside: the convention block said
+`blog/index.md` while the slash commands sitting next to it said `blog/_index.md`.
+A preserve is not a neutral act — it pins one artifact while its siblings move.
+
+**The per-repo layer then hit a real bug, and the sweep is on hold because of it.**
+`plan_migration()` reads the current index name from config only:
+
+```python
+current_index = config.get("index_file", OKF_INDEX_FILE)
+```
+
+Sixteen of the 24 repos have a `.devlog/` with no `config.yaml` — they were
+scaffolded by the *global* convention, which never writes one. For those, the
+default resolves to `index.md`, a file that does not exist, so `index_rename`
+computes False and the real `_index.md` is never seen. Migration would write a
+correct new `index.md` and leave the old one orphaned beside it — then count it as
+a blog entry forever after, since the skip set only ever contained the two names
+it already knew about.
+
+Not destructive, and the 8 config-carrying repos migrate correctly. But it is
+litter in 16 git repositories, so the fix belonged before the sweep, not after.
+
+## The fix (0.6.1)
+
+Config is the wrong sole authority for a filename when the file is right there to
+look at. `plan_migration()` now probes disk when the configured index is absent:
+
+```python
+if not (blog_dir / current_index).exists() and (blog_dir / LEGACY_INDEX_FILE).exists():
+    current_index = LEGACY_INDEX_FILE
+```
+
+That one substitution fixes three symptoms at once, because everything downstream
+reads `plan.current_index`: the rename is planned, `_apply_migration` `git mv`s
+instead of writing a second file, and `_index.md` enters the skip set so it stops
+being tallied as a blog entry.
+
+A second, quieter correction went in alongside it. `config_update` was
+`current_index != OKF_INDEX_FILE`, so a config-less project now reaching that
+branch via the probe would be told "config: would set index_file: index.md" —
+an edit `_set_config_index_file()` silently declines, since there's no config to
+edit. It's now gated on an `index_file:` key actually existing. A dry run that
+promises work it won't do is worse than no dry run.
+
+Before and after on a real repo (`accounting`, five entries, no config):
+
+```console
+- └── index: would stamp index.md with okf_version
+- ├── 1 entries already conformant          # ← that was _index.md
++ └── index: _index.md would be renamed to index.md
+```
+
+Three tests cover it, two of which fail against the old code; the third pins the
+probe against re-firing once `index.md` is real, which would otherwise make
+`status` report non-conformance forever. Full suite 199 green, ruff clean.
+
+## What's next
 - **A fleet-scoped verb.** `devlog status --all <root>` (report) before
   `devlog fleet migrate` (act) — read-only first, since a sweep that rewrites
   frontmatter across 24 repos is exactly the kind of surprise-VCS-diff the project
-  has already argued against for hooks.
+  has already argued against for hooks. Six of those repos have dirty working
+  trees right now, which is its own argument for reporting before acting.
 - **Release discipline has teeth now.** The existing open thread noted that
   version bumps matter or the stamp machinery reports nothing. The stronger
   version: if the default branch lags, the machinery reports *backwards*. A CI
