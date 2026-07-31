@@ -38,6 +38,7 @@ _SENTINEL_VERSION_RE = re.compile(r"<!-- DEVLOG:START v([0-9A-Za-z.\-+]+)")
 # Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf
 OKF_VERSION = "0.1"
 OKF_INDEX_FILE = "index.md"  # OKF reserves the bare `index.md` filename.
+LEGACY_INDEX_FILE = "_index.md"  # pre-0.5.0 name; `_` sorted it first in listings.
 DEFAULT_ENTRY_TYPE = "Devlog Entry"
 
 
@@ -320,11 +321,28 @@ class MigrationPlan:
         )
 
 
+def _has_index_file_key(project_root: Path) -> bool:
+    """Whether .devlog/config.yaml exists and declares an `index_file` key."""
+    cfg = project_root / ".devlog" / "config.yaml"
+    try:
+        return bool(re.search(r"(?m)^\s*index_file\s*:", cfg.read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError):
+        return False
+
+
 def plan_migration(project_root: Path, config: dict[str, Any]) -> MigrationPlan:
     """Inspect a blog and report what OKF migration would change. Pure: reads
     files, writes nothing. ``plan.needed`` answers "does this blog need migrating?"."""
     blog_dir = project_root / config["blog_dir"]
     current_index = config.get("index_file", OKF_INDEX_FILE)
+    # Config is the wrong sole authority for a filename when the file itself is
+    # right there to look at. A project scaffolded by the *global* convention has
+    # no .devlog/config.yaml at all, so `index_file` falls back to the OKF default
+    # and a legacy `_index.md` on disk would be invisible: no rename would be
+    # planned, a fresh index.md would be written beside it, and the orphan would
+    # then be counted as a blog entry forever (it isn't in `skip`).
+    if not (blog_dir / current_index).exists() and (blog_dir / LEGACY_INDEX_FILE).exists():
+        current_index = LEGACY_INDEX_FILE
     plan = MigrationPlan(current_index=current_index)
     skip = {current_index, OKF_INDEX_FILE}
 
@@ -351,7 +369,11 @@ def plan_migration(project_root: Path, config: dict[str, Any]) -> MigrationPlan:
         except (OSError, UnicodeDecodeError):
             fm = {}
         plan.index_needs_stamp = "okf_version" not in fm
-    plan.config_update = current_index != OKF_INDEX_FILE
+    # Only claim a config rewrite when there is an `index_file:` line to rewrite.
+    # A config-less project reaches the branch above via the disk probe, and
+    # promising an edit that `_set_config_index_file` will silently decline is a
+    # report that doesn't match what happens.
+    plan.config_update = current_index != OKF_INDEX_FILE and _has_index_file_key(project_root)
 
     # The convention template for NEW entries is generated from this list, so a
     # stale list (no `type`, or still using `summary`) would keep producing
