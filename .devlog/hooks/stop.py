@@ -34,6 +34,77 @@ REMINDER = (
 )
 
 
+# learned.md is meant to be read in full at the start of a session, and it is the
+# index once a project splits into .devlog/knowledge/ — either way it is the file
+# that always gets loaded, so it is the one worth measuring.
+#
+# The real limit is ~25k tokens per read, not a byte count. Bytes are only a proxy,
+# and a pessimistic one is required: learned.md is dense with identifiers, paths and
+# code fragments (~2.5 bytes/token measured, against ~4 for prose), so 25k tokens can
+# arrive at ~60KB. Warning at 100KB would stay silent through the whole window where
+# reads are already truncating. Past ~256KB the read is refused outright.
+BUDGET_BYTES = 60 * 1024
+CEILING_BYTES = 256 * 1024
+
+
+def _learned_state(cwd: str | None) -> tuple[int, bool] | None:
+    """(size of .devlog/learned.md, whether .devlog/knowledge/ exists).
+
+    None if there is no cwd or no learned.md. The second element decides which
+    remedy to name: a project that has already split needs a different fix than
+    one that has not.
+    """
+    if not cwd:
+        return None
+    devlog = Path(cwd) / ".devlog"
+    try:
+        size = (devlog / "learned.md").stat().st_size
+    except OSError:
+        return None
+    try:
+        has_knowledge = (devlog / "knowledge").is_dir()
+    except OSError:
+        has_knowledge = False
+    return size, has_knowledge
+
+
+def _size_warning(size: int, has_knowledge: bool = False) -> str | None:
+    """Return a line to append to the reminder, or None when the file is healthy.
+
+    Two tiers, because one flat warning reads the same at 61KB as at 400KB and
+    those are different problems: over budget is housekeeping, over the read
+    ceiling means the file is not reaching anyone at all.
+    """
+    if size < BUDGET_BYTES:
+        return None
+    kb = size // 1024
+    # Name the remedy that actually applies. Telling a project that already has
+    # knowledge/ to "archive closed threads" sends it back to a lever it has
+    # mostly pulled; the index being large means a topic belongs in its own file.
+    if has_knowledge:
+        remedy = (
+            "Move a topic's material out of the index into a .devlog/knowledge/ file, "
+            "leaving a one-line hook behind, and delete Open threads that have closed."
+        )
+    else:
+        remedy = (
+            "Delete Open threads that have closed or archive them to .devlog/archive/; "
+            "if the durable material is what's large, split it into .devlog/knowledge/ "
+            "and leave a one-line hook per file behind in learned.md."
+        )
+    if size >= CEILING_BYTES:
+        return (
+            f"devlog: .devlog/learned.md is {kb}KB and NO LONGER LOADS — past "
+            f"{CEILING_BYTES // 1024}KB the read fails silently, so treat any claim to "
+            f"have read it as unverified. {remedy}"
+        )
+    return (
+        f"devlog: .devlog/learned.md is {kb}KB, over its {BUDGET_BYTES // 1024}KB budget "
+        "— reads of it return a TRUNCATED page, not the file, and truncation looks like "
+        f"success (hard failure at {CEILING_BYTES // 1024}KB). {remedy}"
+    )
+
+
 def _is_global_instance(script_path: Path) -> bool:
     """True when this copy is the globally-installed hook (~/.devlog/hooks/)."""
     try:
@@ -92,7 +163,18 @@ def main() -> None:
         # Defer-detection is best-effort; on any surprise, fall through and fire.
         pass
 
-    json.dump({"decision": "block", "reason": REMINDER}, sys.stdout)
+    reason = REMINDER
+    try:
+        state = _learned_state(payload.get("cwd"))
+        if state is not None:
+            warning = _size_warning(*state)
+            if warning:
+                reason = f"{reason}\n\n{warning}"
+    except Exception:
+        # Size reporting is best-effort; never break a turn over a stat call.
+        pass
+
+    json.dump({"decision": "block", "reason": reason}, sys.stdout)
     sys.exit(0)
 
 

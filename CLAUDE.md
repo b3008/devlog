@@ -1,9 +1,9 @@
-<!-- DEVLOG:START v0.3.0 - Do not edit manually. Remove with: devlog uninstall --ai <key> -->
+<!-- DEVLOG:START v0.6.0 - Do not edit manually. Remove with: devlog uninstall --ai <key> -->
 ## Development Blog (Automatic)
 
 This project keeps a development blog in `blog/`. The full convention — triggers, entry format, voice, tags — is in your global CLAUDE.md (`~/.claude/CLAUDE.md`, installed by devlog); follow it here. Project-specific settings live in `.devlog/config.yaml` and take precedence over the global defaults.
 
-Before writing an entry, read `.devlog/learned.md` for accumulated project vocabulary, themes, and open threads — and extend it when durable knowledge emerges.
+Before writing an entry, read `.devlog/learned.md` for accumulated project vocabulary, themes, and open threads — and extend it when durable knowledge emerges. If it is an index of pointers into `.devlog/knowledge/` rather than a flat file, load only the topic files whose hooks look relevant, and file new durable facts in the matching topic file.
 
 Collaborators without the global devlog install: run `devlog install --ai claude --full` in this project to inject the standalone convention here instead.
 <!-- DEVLOG:END -->

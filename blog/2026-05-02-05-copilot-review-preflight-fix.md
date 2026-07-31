@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Copilot review catches the slash commands' missing-scaffolding gap"
 date: 2026-05-02
 timestamp: 2026-05-02T11:43:18
 tags: [bug-fix, ux, research]
-summary: "GitHub Copilot's review of the README documentation PR flagged that /devlog-write would fail in any fresh repo with only the global install — the command bodies assumed scaffolding existed. Each command got a preflight section; /devlog-write now bootstraps on first use, the read-only commands exit gracefully."
+description: "GitHub Copilot's review of the README documentation PR flagged that /devlog-write would fail in any fresh repo with only the global install — the command bodies assumed scaffolding existed. Each command got a preflight section; /devlog-write now bootstraps on first use, the read-only commands exit gracefully."
 ---
 
 ## What changed

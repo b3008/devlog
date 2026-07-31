@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "First slash command: /devlog-catchup for instant project context"
 date: 2026-05-02
 timestamp: 2026-05-02T10:14:09
 tags: [feature, cli, ux]
-summary: "devlog now ships a Claude Code slash command, /devlog-catchup, that instructs the agent to read the blog index, recent entries, and learned.md and report back a structured summary of project state."
+description: "devlog now ships a Claude Code slash command, /devlog-catchup, that instructs the agent to read the blog index, recent entries, and learned.md and report back a structured summary of project state."
 ---
 
 ## What changed

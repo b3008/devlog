@@ -15,6 +15,16 @@ class AgentConfig:
     key: str
     name: str
     context_file: str  # e.g. "CLAUDE.md", "AGENTS.md"
+    # Project-relative directory for custom slash commands, when the agent
+    # supports markdown command files (e.g. ".claude/commands").
+    commands_dir: str | None = None
+    # Home-relative directory holding the agent's global config, when the
+    # agent supports a global install (e.g. ".claude", ".config/opencode").
+    # The global context file lands at ~/{global_dir}/{context_file} and
+    # global commands at ~/{global_dir}/commands.
+    global_dir: str | None = None
+    # Whether devlog's hook bundle (settings.json + python scripts) applies.
+    supports_hooks: bool = False
 
 
 AGENTS: dict[str, AgentConfig] = {}
@@ -26,9 +36,26 @@ def _reg(cfg: AgentConfig) -> None:
 
 # ── Agents with dedicated context files ──────────────────────────────────
 
-_reg(AgentConfig(key="claude", name="Claude Code", context_file="CLAUDE.md"))
+_reg(AgentConfig(
+    key="claude",
+    name="Claude Code",
+    context_file="CLAUDE.md",
+    commands_dir=".claude/commands",
+    global_dir=".claude",
+    supports_hooks=True,
+))
 _reg(AgentConfig(key="copilot", name="GitHub Copilot", context_file=".github/copilot-instructions.md"))
 _reg(AgentConfig(key="gemini", name="Gemini CLI", context_file="GEMINI.md"))
+
+# ── Agents using AGENTS.md, with extra integration ──────────────────────
+
+_reg(AgentConfig(
+    key="opencode",
+    name="OpenCode",
+    context_file="AGENTS.md",
+    commands_dir=".opencode/commands",
+    global_dir=".config/opencode",
+))
 
 # ── Agents using AGENTS.md ──────────────────────────────────────────────
 
@@ -51,7 +78,6 @@ for _key, _name in [
     ("tabnine", "Tabnine"),
     ("goose", "Goose"),
     ("pi", "Pi Coding Agent"),
-    ("opencode", "OpenCode"),
     ("forge", "Forge"),
     ("shai", "SHAI"),
     ("iflow", "iFlow CLI"),

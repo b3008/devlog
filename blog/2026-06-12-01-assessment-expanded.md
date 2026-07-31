@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Assessment expanded: the constraint flipped from capture to consumption"
 date: 2026-06-12
 timestamp: 2026-06-12T14:34:27
 tags: [research, architecture, ux]
-summary: "Re-opening the agent-codebase assessment produced a verified fix (the Stop hook exit-code theory confirmed against the docs), a refutation of the prior entry's own correction, and a reframed thesis: agents solved capture discipline by construction, so retrieval and trust are now the binding constraints."
+description: "Re-opening the agent-codebase assessment produced a verified fix (the Stop hook exit-code theory confirmed against the docs), a refutation of the prior entry's own correction, and a reframed thesis: agents solved capture discipline by construction, so retrieval and trust are now the binding constraints."
 ---
 
 ## What changed

@@ -7,6 +7,14 @@ domain vocabulary, entity names, recurring themes, open questions.
 
 Humans can edit it freely. The agent should read it before writing
 a blog entry and append to it when new durable context emerges.
+
+This flat form is the right shape for almost every project. If it ever
+outgrows ~60KB, it becomes an index instead: the durable material moves
+into .devlog/knowledge/<topic>.md files and each one gets a single line
+here — `- [Title](knowledge/slug.md) — what's inside, in one clause` —
+so a session can read this file and open only what it needs. Open
+threads stay written out here either way. See "Project context" in the
+convention block for the full procedure.
 -->
 
 ## Glossary

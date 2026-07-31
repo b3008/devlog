@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Dogfooding catch: devlog litters every repo with an untracked session log"
 date: 2026-06-14
 timestamp: 2026-06-14T09:21:12
 tags: [infrastructure, bug-fix]
-summary: "The SessionEnd hook writes .devlog/sessions.jsonl into every installing project but nothing gitignores it — so it sits untracked forever. Fixed here; the real fix belongs in `devlog init`."
+description: "The SessionEnd hook writes .devlog/sessions.jsonl into every installing project but nothing gitignores it — so it sits untracked forever. Fixed here; the real fix belongs in `devlog init`."
 ---
 
 ## What changed

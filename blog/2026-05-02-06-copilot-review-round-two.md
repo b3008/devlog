@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Second pass on the Copilot review: config-aware templates + hashed command manifest"
 date: 2026-05-02
 timestamp: 2026-05-02T11:54:20
 tags: [bug-fix, infrastructure, ux]
-summary: "PR #8's Copilot review had nine comments — only the bootstrap gap got fixed in PR #10. The remaining six fell into three buckets: templates lying about config, the manifest losing track of orphans, and a stale Stop hook entry in this repo. All three are addressed; tests grew from 97 to 102."
+description: "PR #8's Copilot review had nine comments — only the bootstrap gap got fixed in PR #10. The remaining six fell into three buckets: templates lying about config, the manifest losing track of orphans, and a stale Stop hook entry in this repo. All three are addressed; tests grew from 97 to 102."
 ---
 
 ## What changed

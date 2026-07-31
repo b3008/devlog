@@ -1,8 +1,9 @@
 ---
+type: "Devlog Entry"
 title: "Landscape survey: who else is doing automatic dev journals?"
 date: 2026-04-18
 tags: [architecture, research]
-summary: "A critical review of every comparable project we could find — commit-driven journals, changelog generators, markdown diary conventions, and agent-context standards — and what devlog should (and shouldn't) borrow from each."
+description: "A critical review of every comparable project we could find — commit-driven journals, changelog generators, markdown diary conventions, and agent-context standards — and what devlog should (and shouldn't) borrow from each."
 ---
 
 ## What changed

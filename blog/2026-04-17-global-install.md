@@ -1,8 +1,9 @@
 ---
+type: "Devlog Entry"
 title: "Global install: one command, every project blogs"
 date: 2026-04-17
 tags: [feature, architecture, cli]
-summary: "devlog install --ai claude --global injects a self-bootstrapping convention into ~/.claude/CLAUDE.md so every project gets blogging without per-project setup."
+description: "devlog install --ai claude --global injects a self-bootstrapping convention into ~/.claude/CLAUDE.md so every project gets blogging without per-project setup."
 ---
 
 ## What changed

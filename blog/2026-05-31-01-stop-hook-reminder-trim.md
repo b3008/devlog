@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Trimming the Stop hook reminder, deferring the smarter-hook idea"
 date: 2026-05-31
 timestamp: 2026-05-31T19:09:50
 tags: [ux, infrastructure, refactor]
-summary: "The Stop hook's reminder text shrunk from ~52 to ~30 words after the user pointed out that every turn surfaces a red 'Stop hook error' box. The smarter-hook proposal (mutation-gated blocking) was considered and deferred — keep the deterministic single-shot design, just stop being verbose inside it."
+description: "The Stop hook's reminder text shrunk from ~52 to ~30 words after the user pointed out that every turn surfaces a red 'Stop hook error' box. The smarter-hook proposal (mutation-gated blocking) was considered and deferred — keep the deterministic single-shot design, just stop being verbose inside it."
 ---
 
 ## What changed

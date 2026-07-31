@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "devlog init now scaffolds a scoped .devlog/.gitignore"
 date: 2026-06-14
 timestamp: 2026-06-14T09:37:56
 tags: [feature, infrastructure, testing]
-summary: "Closed yesterday's gap: init (and install, for older repos) now writes a self-contained .devlog/.gitignore for the runtime session log — scoped rather than editing the user's root .gitignore."
+description: "Closed yesterday's gap: init (and install, for older repos) now writes a self-contained .devlog/.gitignore for the runtime session log — scoped rather than editing the user's root .gitignore."
 ---
 
 ## What changed

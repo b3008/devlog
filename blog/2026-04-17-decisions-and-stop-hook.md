@@ -1,8 +1,9 @@
 ---
+type: "Devlog Entry"
 title: "Catching decision-only turns: convention rewording + Claude Code Stop hook"
 date: 2026-04-17
 tags: [architecture, feature, cli]
-summary: "Two text changes plus an opt-in runtime hook close the gap where agents skipped writing entries because no artifact was produced."
+description: "Two text changes plus an opt-in runtime hook close the gap where agents skipped writing entries because no artifact was produced."
 ---
 
 ## What changed

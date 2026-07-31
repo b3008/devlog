@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Per-day index in filenames + ISO timestamp in frontmatter"
 date: 2026-05-02
 timestamp: 2026-05-02T10:04:53
 tags: [feature, architecture]
-summary: "Entry filenames now carry a zero-padded per-day index (YYYY-MM-DD-NN-slug.md) and frontmatter gains an ISO 8601 timestamp, so entries sort deterministically and intra-day order is preserved."
+description: "Entry filenames now carry a zero-padded per-day index (YYYY-MM-DD-NN-slug.md) and frontmatter gains an ISO 8601 timestamp, so entries sort deterministically and intra-day order is preserved."
 ---
 
 ## What changed

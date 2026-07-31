@@ -1,9 +1,10 @@
 ---
+type: "Devlog Entry"
 title: "Copilot round four: asymmetric trust for install vs uninstall"
 date: 2026-06-12
 timestamp: 2026-06-12T15:19:19
 tags: [bug-fix, infrastructure]
-summary: "PR #12's review produced two fixes and one deliberate refusal — and forced a policy worth naming: when devlog can't prove a file is its own, install overwrites (a stale hook is worse than a lost edit) while uninstall preserves (a stray file is better than a deleted one)."
+description: "PR #12's review produced two fixes and one deliberate refusal — and forced a policy worth naming: when devlog can't prove a file is its own, install overwrites (a stale hook is worse than a lost edit) while uninstall preserves (a stray file is better than a deleted one)."
 ---
 
 ## What changed

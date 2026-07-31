@@ -9,7 +9,7 @@ Read the devlog and report back so the rest of this session has full context for
 Before doing anything else, resolve the blog directory and index file from `.devlog/config.yaml` if it exists:
 
 - `<blog_dir>` is the `blog_dir` value (default: `blog`).
-- `<index_file>` is the `index_file` value (default: `_index.md`).
+- `<index_file>` is the `index_file` value (default: `index.md`).
 
 Use these resolved paths for every reference below. If `.devlog/config.yaml` is missing, fall back to the defaults — but in that case also run the Preflight check, which will likely conclude there is no devlog.
 
@@ -21,9 +21,9 @@ Otherwise, proceed.
 
 ## Steps
 
-1. Read `<blog_dir>/<index_file>` (e.g. `blog/_index.md`) to see the entry list.
+1. Read `<blog_dir>/<index_file>` (e.g. `blog/index.md`) to see the entry list.
 2. Read the 5 most recent entries (or all of them if fewer than 5).
-3. Read `.devlog/learned.md` for accumulated project knowledge — glossary, entities, recurring themes, open threads.
+3. Read `.devlog/learned.md` for accumulated project knowledge — glossary, entities, recurring themes, open threads. If it is an index of one-line pointers into `.devlog/knowledge/` rather than a flat file, read the index and the Open threads written out in it, then open **only** the topic files whose hooks matter for the summary below. Do not load the whole `knowledge/` directory — the index exists so you don't have to. If `.devlog/archive/` exists it holds already-closed threads, greppable on demand but never loaded wholesale.
 
 Then summarize in this order:
 
