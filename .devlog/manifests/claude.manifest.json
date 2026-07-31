@@ -1,9 +1,9 @@
 {
   "agent": "claude",
-  "version": "0.6.0",
-  "installed_at": "2026-07-29T16:14:27.539921+00:00",
+  "version": "0.6.1",
+  "installed_at": "2026-07-31T10:22:30.506404+00:00",
   "files": {
-    "CLAUDE.md": "30407cadcc8c0a1f26e4ba80d9f07dfa72652ebaa05f729021cab30f94904a16"
+    "CLAUDE.md": "36634c96419d7302fa014326f4a8de8dd243a4b3aa382529324db1afc5c9d486"
   },
   "hooks": [
     {
